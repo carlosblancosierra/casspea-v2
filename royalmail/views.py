@@ -77,8 +77,9 @@ class RoyalMailOrderCreateView(generics.CreateAPIView):
                     label_data = first_order.get('label')
 
             # Update order if we got a tracking number
-            if tracking_number:
+            if tracking_number and order_identifier:
                 order.tracking_number = tracking_number
+                order.shipping_order_id = order_identifier
                 order.status = 'processing'
                 order.save()
 
@@ -146,14 +147,16 @@ class RoyalMailLabelView(generics.GenericAPIView):
         try:
             order = Order.objects.get(order_id=order_id)
 
-            if not order.tracking_number:
+            # Use shipping_order_id instead of tracking_number
+            if not order.shipping_order_id:
                 return Response(
                     {'error': 'No shipping label available for this order'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             royal_mail = RoyalMailService()
-            label_pdf = royal_mail.get_shipping_label(order.tracking_number)
+            # Note: Passing the shipping_order_id here
+            label_pdf = royal_mail.get_shipping_label(order.shipping_order_id)
 
             response = HttpResponse(label_pdf, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="shipping_label_{order.order_id}.pdf"'

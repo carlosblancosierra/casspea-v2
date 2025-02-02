@@ -40,6 +40,9 @@ class Order(models.Model):
         editable=False
     )
 
+    # New field to store the Royal Mail order identifier
+    shipping_order_id = models.CharField(max_length=100, null=True, blank=True)
+
     checkout_session = models.OneToOneField(
         'checkout.CheckoutSession',
         on_delete=models.PROTECT,
