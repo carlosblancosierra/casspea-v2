@@ -13,6 +13,7 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
+
 class RoyalMailOrderListView(generics.ListAPIView):
     """List Royal Mail orders"""
     permission_classes = [permissions.IsAdminUser]
@@ -26,6 +27,7 @@ class RoyalMailOrderListView(generics.ListAPIView):
             'checkout_session',
             'checkout_session__shipping_option'
         )
+
 
 class RoyalMailOrderCreateView(generics.CreateAPIView):
     """Create Royal Mail shipping label"""
@@ -123,6 +125,7 @@ class RoyalMailOrderCreateView(generics.CreateAPIView):
                 'detail': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 class RoyalMailOrderDetailView(generics.RetrieveAPIView):
     """Get Royal Mail order details"""
     permission_classes = [permissions.IsAdminUser]
@@ -132,6 +135,7 @@ class RoyalMailOrderDetailView(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return Order.objects.filter(tracking_number__isnull=False)
+
 
 class RoyalMailLabelView(generics.GenericAPIView):
     """Download Royal Mail shipping label"""

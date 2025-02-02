@@ -34,12 +34,34 @@ class RoyalMailService:
             "emailAddress": order.email
         }
 
+        # Build billing details: use billing_address if available; otherwise, fallback to shipping_address.
+        billing_address = order.billing_address if order.billing_address else order.shipping_address
+        billing = {
+            "address": {
+                "fullName": billing_address.full_name,
+                "addressLine1": billing_address.street_address,
+                "addressLine2": billing_address.street_address2,
+                "city": billing_address.city,
+                "county": billing_address.county,
+                "postcode": billing_address.postcode,
+                "countryCode": "GB"
+            }
+        }
+
+        # Determine package format based on service code.
+        service_code = order.checkout_session.shipping_option.service_code
+        # Use a mapping for service codes to package formats.
+        package_mapping = {
+            "TPS48": "parcel",  # Royal Mail docs indicate TPS48 orders require a 'parcel' format.
+        }
+        package_format = package_mapping.get(service_code, "smallParcel")
+
         # Build packages data
         packages = []
         for item in order.checkout_session.cart.items.all():
             package = {
                 "weightInGrams": (item.product.weight + item.product.box_weight) * item.quantity,
-                "packageFormatIdentifier": "smallParcel",
+                "packageFormatIdentifier": package_format,
             }
             packages.append(package)
 
@@ -48,6 +70,7 @@ class RoyalMailService:
             "items": [{
                 "orderReference": order.order_id,
                 "recipient": recipient,
+                "billing": billing,
                 "packages": packages,
                 "orderDate": order.created.isoformat(),
                 "subtotal": float(order.checkout_session.cart.base_total),
@@ -56,7 +79,7 @@ class RoyalMailService:
                 "currencyCode": "GBP",
                 "postageDetails": {
                     "sendNotificationsTo": "recipient",
-                    "serviceCode": order.checkout_session.shipping_option.service_code,
+                    "serviceCode": service_code,
                     "receiveEmailNotification": True,
                     "receiveSmsNotification": True if order.shipping_address.phone else False
                 },
@@ -74,8 +97,8 @@ class RoyalMailService:
             return response.json()
         except requests.exceptions.RequestException as e:
             logger.error("royal_mail_order_creation_failed",
-                        error=str(e),
-                        order_id=order.order_id)
+                         error=str(e),
+                         order_id=order.order_id)
             raise ValidationError(f"Failed to create Royal Mail order: {str(e)}")
 
     def get_shipping_label(self, order_identifier: str) -> bytes:
@@ -95,6 +118,6 @@ class RoyalMailService:
             return response.content
         except requests.exceptions.RequestException as e:
             logger.error("royal_mail_label_fetch_failed",
-                        error=str(e),
-                        order_identifier=order_identifier)
+                         error=str(e),
+                         order_identifier=order_identifier)
             raise ValidationError(f"Failed to fetch shipping label: {str(e)}")
