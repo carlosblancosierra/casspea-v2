@@ -111,7 +111,7 @@ class RoyalMailService:
                 headers=self.headers,
                 params={
                     "documentType": "postageLabel",
-                    "includeReturnsLabel": False
+                    "includeReturnsLabel": "false"
                 }
             )
             response.raise_for_status()
