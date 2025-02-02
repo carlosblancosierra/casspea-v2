@@ -98,10 +98,13 @@ class Order(models.Model):
         """Get Stripe payment intent from checkout session"""
         return self.checkout_session.stripe_payment_intent
 
-    # check if ID is unique
     def save(self, *args, **kwargs):
-        if Order.objects.filter(order_id=self.order_id).exists():
-            self.order_id = generate_order_id()
+        if not self.order_id:
+            # Optionally, ensure uniqueness by looping
+            unique_id = generate_order_id()
+            while Order.objects.filter(order_id=unique_id).exists():
+                unique_id = generate_order_id()
+            self.order_id = unique_id
         super().save(*args, **kwargs)
 
 
