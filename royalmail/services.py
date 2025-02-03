@@ -52,7 +52,9 @@ class RoyalMailService:
         service_code = order.checkout_session.shipping_option.service_code
         # Use a mapping for service codes to package formats.
         package_mapping = {
-            "TPS48": "parcel",  # Royal Mail docs indicate TPS48 orders require a 'parcel' format.
+            "TPS48": "parcel", 
+            "TPS24": "parcel", 
+            "SD1": "parcel", 
         }
         package_format = package_mapping.get(service_code, "smallParcel")
 
