@@ -286,22 +286,39 @@ class ProductGalleryImage(models.Model):
         )
 
     def save(self, *args, **kwargs):
+        if self.order is None:
+            # If no order specified, put it at the end
+            max_order = ProductGalleryImage.objects.filter(product=self.product).aggregate(
+                models.Max('order'))['order__max']
+            self.order = 0 if max_order is None else max_order + 1
+        
         # Handle image ordering
-        if not self.pk or (
-            self.pk and
-            ProductGalleryImage.objects.get(pk=self.pk).order != self.order
-        ):
-            with transaction.atomic():
-                # If an image already exists at this order, shift other images
-                existing_images = ProductGalleryImage.objects.filter(
+        with transaction.atomic():
+            if not self.pk:  # New image
+                # Shift all images with order >= self.order up by 1
+                ProductGalleryImage.objects.filter(
                     product=self.product,
                     order__gte=self.order
-                ).exclude(pk=self.pk).select_for_update()
-
-                # Shift the order of other images
-                for img in existing_images:
-                    img.order += 1
-                    img.save()
+                ).update(order=models.F('order') + 1)
+            else:  # Existing image
+                old_instance = ProductGalleryImage.objects.get(pk=self.pk)
+                if old_instance.order != self.order:
+                    if old_instance.order < self.order:
+                        # Moving image to a higher order
+                        # Shift images between old and new position down
+                        ProductGalleryImage.objects.filter(
+                            product=self.product,
+                            order__gt=old_instance.order,
+                            order__lte=self.order
+                        ).exclude(pk=self.pk).update(order=models.F('order') - 1)
+                    else:
+                        # Moving image to a lower order
+                        # Shift images between new and old position up
+                        ProductGalleryImage.objects.filter(
+                            product=self.product,
+                            order__gte=self.order,
+                            order__lt=old_instance.order
+                        ).exclude(pk=self.pk).update(order=models.F('order') + 1)
 
         # Process images
         if self.pk:
