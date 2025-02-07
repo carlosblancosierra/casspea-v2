@@ -187,6 +187,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     'https://casspea.co.uk',
     'https://www.casspea.co.uk',
+    'https://new.casspea.co.uk',
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -195,6 +196,8 @@ CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 CSRF_TRUSTED_ORIGINS = [
     'https://casspea.co.uk',
     'https://www.casspea.co.uk',
+    'https://dev.d29kjbfnh50hd9.amplifyapp.com',
+    'https://new.casspea.co.uk',
 ]
 
 # Cookie Settings
