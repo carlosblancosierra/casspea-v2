@@ -9,11 +9,13 @@ class EmailType(models.Model):
     NEWSLETTER = 'newsletter'
     CONTACT = 'contact'
     ORDER_PAID = 'order_paid'
+    NON_PAYED_ORDER = 'non_payed_order'
 
     CHOICES = [
         (NEWSLETTER, 'Newsletter'),
         (CONTACT, 'Contact'),
         (ORDER_PAID, 'Order Paid'),
+        (NON_PAYED_ORDER, 'Non Payed Order'),
     ]
 
     name = models.CharField(
@@ -25,6 +27,7 @@ class EmailType(models.Model):
 
     def __str__(self):
         return self.name
+
 
 class EmailSent(models.Model):
     """

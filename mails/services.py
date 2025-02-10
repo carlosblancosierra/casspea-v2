@@ -50,7 +50,6 @@ class PendingCheckoutSessionsMailProcessor:
 
     def log_email_sent(self, session, email_type, is_test=False):
         EmailSent.objects.create(
-            email=session.email,
             email_type=email_type,
             content_object=session,
             is_test=is_test
