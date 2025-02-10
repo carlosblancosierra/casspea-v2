@@ -16,11 +16,13 @@ class Command(BaseCommand):
         parser.add_argument(
             '--dry-run',
             action='store_true',
+            dest='dry_run',
             help='Log session details without sending emails or creating log records.'
         )
         parser.add_argument(
             '--test',
             action='store_true',
+            dest='test',
             help='Send test emails using django mail_admins (to the ADMINS defined in settings).'
         )
 
