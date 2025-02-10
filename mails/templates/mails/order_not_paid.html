@@ -1,0 +1,72 @@
+{% extends "mails/base.html" %}
+
+{% block title %}Complete Your CassPea Order{% endblock %}
+
+{% block hero %}
+    <h1>Don't Forget your chocolates!</h1>
+    <p>It looks like you left some items in your cart. Don't miss out!</p>
+    <a href="{{ checkout_session.cart.get_absolute_url }}" class="button">Return to Your Cart</a>
+{% endblock %}
+
+{% block content %}
+    <h2>Your Cart</h2>
+    <div class="order-summary">
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <th style="text-align: left; padding: 8px 0;">Item</th>
+                <th style="text-align: right; padding: 8px 0;">Price</th>
+            </tr>
+            {% for item in checkout_session.cart.items.all %}
+            <tr>
+                <td style="padding: 12px 0; border-top: 1px solid #eee;">
+                    <strong>{{ item.quantity }}x {{ item.product.name }}</strong>
+                </td>
+                <td style="
+                    text-align: right;
+                    padding: 12px 0;
+                    border-top: 1px solid #eee;
+                    vertical-align: top;
+                ">
+                    £{{ item.base_price }}
+                </td>
+            </tr>
+            {% endfor %}
+
+            <!-- Cart Summary Rows -->
+            <tr>
+                <td colspan="2" style="padding-top: 20px;">
+                    <div style="border-top: 2px solid #eee; padding-top: 12px;">
+                        <table style="width: 100%;">
+                            <tr>
+                                <td style="padding: 4px 0;">Base Total</td>
+                                <td style="text-align: right;">£{{ checkout_session.cart.base_total }}</td>
+                            </tr>
+                            {% if checkout_session.cart.total_savings > 0 %}
+                            <tr>
+                                <td style="padding: 4px 0;">Discount</td>
+                                <td style="text-align: right; color: #10b981;">-£{{ checkout_session.cart.total_savings }}</td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td style="padding: 4px 0;">Shipping</td>
+                                <td style="text-align: right;">£{{ checkout_session.shipping_cost_pounds }}</td>
+                            </tr>
+                            <tr style="font-weight: bold;">
+                                <td style="padding: 4px 0; border-top: 1px solid #eee;">Total</td>
+                                <td style="text-align: right; border-top: 1px solid #eee;">£{{ checkout_session.total_with_shipping }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="discount-code">
+        Use code <strong>SHARETHELOVE</strong> for <strong>10% OFF</strong> your order!
+    </div>
+
+    <p>Simply click the button above to return to your cart and complete your purchase. Hurry, your items are waiting!</p>
+    <p>If you have any questions or need assistance, feel free to reply to this email or contact our support team.</p>
+    <p>Best regards,<br>The CassPea Team</p>
+{% endblock %}

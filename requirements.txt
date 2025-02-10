@@ -16,3 +16,5 @@ djangorestframework-simplejwt
 rest_framework_simplejwt
 djoser
 django-filter
+watchtower
+django-q

@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from decimal import Decimal, ROUND_HALF_UP, ROUND_UP
+from django.contrib.contenttypes.fields import GenericRelation
 
 User = get_user_model()
 from addresses.models import Address
@@ -60,6 +61,9 @@ class CheckoutSession(models.Model):
         null=True,
         blank=True
     )
+
+    # Add GenericRelation to link EmailSent records
+    emailsent = GenericRelation('mails.EmailSent', related_query_name='emailsent')
 
     objects = CheckoutSessionManager()
 

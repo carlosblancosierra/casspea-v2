@@ -53,5 +53,8 @@ class EmailSent(models.Model):
     sent = models.DateTimeField(blank=True, null=True)
     created = models.DateTimeField(auto_now_add=True)
 
+    # New flag to track if this is a test email log
+    is_test = models.BooleanField(default=False)
+
     def __str__(self):
         return f"{self.email_type.name} for {self.content_object} - {self.status}"

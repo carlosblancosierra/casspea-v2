@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Welcome to CassPea Newsletter</title>
+    <title>{% block title %}CassPea{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- Inter Font Integration -->
@@ -71,11 +71,10 @@
             font-size: 16px;
             margin-bottom: 20px;
         }
-        .hero .button {
-            display: inline-block;
-            padding: 12px 25px;
+        .button, .hero .button {
             background-color: #ffffff;
-            color: #4f46e5 !important;
+            color: #4f46e5;
+            padding: 10px 20px;
             text-decoration: none;
             border-radius: 5px;
             font-weight: bold;
@@ -85,35 +84,43 @@
             color: #333333;
         }
         .content h2 {
-            color: #4f46e5;
-            font-size: 24px;
+            font-size: 22px;
             margin-bottom: 10px;
+            color: #4f46e5;
         }
         .content p {
-            line-height: 1.6;
-            margin-bottom: 15px;
             font-size: 16px;
+            margin-bottom: 10px;
+            line-height: 1.5;
         }
         .discount-code {
-            font-size: 18px;
+            background-color: #eef2ff;
+            border-left: 5px solid #4f46e5;
+            padding: 10px 15px;
+            margin: 15px 0;
+            font-size: 16px;
             font-weight: bold;
             color: #4f46e5;
-            background-color: #e8f5e9;
-            padding: 10px;
-            border-left: 4px solid #4f46e5;
-            margin-bottom: 20px;
         }
-        .button {
-            display: inline-block;
-            padding: 12px 25px;
-            background-color: #4f46e5;
-            color: #ffffff !important;
-            text-decoration: none;
-            border-radius: 5px;
+        .order-summary {
+            margin-top: 20px;
+            border-top: 1px solid #dddddd;
+            padding-top: 20px;
+        }
+        .order-summary table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .order-summary th, .order-summary td {
+            text-align: left;
+            padding: 8px 0;
+        }
+        .order-summary th {
             font-weight: bold;
+            color: #4f46e5;
         }
         .footer {
-            background-color: #eeeeee;
+            background-color: #f4f4f4;
             padding: 20px;
             text-align: center;
             color: #777777;
@@ -123,6 +130,7 @@
             color: #4f46e5;
             text-decoration: none;
         }
+
         /* Responsive Styles */
         @media only screen and (max-width: 600px) {
             .container {
@@ -143,6 +151,7 @@
             }
         }
     </style>
+    {% block head_extra %}{% endblock %}
 </head>
 <body>
     <div class="container inter-custom">
@@ -155,30 +164,24 @@
 
         <!-- Hero Section -->
         <div class="hero">
-            <h1>Welcome to the CassPea Newsletter!</h1>
-            <p>Stay updated with our latest news, offers, and exclusive content.</p>
-            <a href="https://www.casspea.co.uk/" class="button">Explore Now</a>
+            {% block hero %}
+            <!-- Default Hero Content -->
+            <h1>Welcome!</h1>
+            <p>We're glad to have you with us.</p>
+            {% endblock %}
         </div>
 
         <!-- Content Section -->
         <div class="content">
-            <h2>Thank You for Joining Us!</h2>
-            <p>Dear Subscriber,</p>
-            <p>We're thrilled to have you on board. At CassPea, we strive to bring you the best products and unparalleled service.</p>
-            <p>As a token of our appreciation, here's your exclusive discount code:</p>
-            <div class="discount-code">
-                Discount Code: SHARETHELOVE
-            </div>
-            <p>Use this code at checkout to receive 10% off your next purchase.</p>
-            <a href="https://www.casspea.co.uk/" class="button">Shop Now</a>
-            <p>If you have any questions or need assistance, feel free to reply to this email or contact our support team.</p>
-            <p>Best regards,<br>The CassPea Team</p>
+            {% block content %}
+            <!-- Default Content -->
+            {% endblock %}
         </div>
 
         <!-- Footer Section -->
         <div class="footer">
             <p>&copy; {{ current_year }} CassPea. All rights reserved.</p>
-            <p>You are receiving this email because you subscribed to our newsletter.</p>
+            <p>You are receiving this email because you made a purchase with us.</p>
             <p><a href="https://www.casspea.co.uk/unsubscribe/">Unsubscribe</a></p>
         </div>
     </div>

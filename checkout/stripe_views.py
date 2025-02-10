@@ -140,7 +140,7 @@ class StripeCheckoutSessionView(APIView):
 
             PROTOCOL = "https"
             API_DOMAIN = "api.casspea.co.uk"
-            FRONTEND_DOMAIN = "new.casspea.co.uk"
+            FRONTEND_DOMAIN = "www.casspea.co.uk"
             FULL_API_DOMAIN = f"{PROTOCOL}://{API_DOMAIN}"
             FULL_FRONTEND_DOMAIN = f"{PROTOCOL}://{FRONTEND_DOMAIN}"
 
@@ -245,20 +245,20 @@ class StripeSuccessView(APIView):
         session_id = request.GET.get('session_id')
         if not session_id:
             logger.error("Missing session_id in request")
-            return redirect(f'https://new.casspea.co.uk/checkout/error?session_id={session_id}')
+            return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
 
         try:
             # Verify the session with Stripe
             session = stripe.checkout.Session.retrieve(session_id)
             if session.payment_status == 'paid':
                 logger.info("stripe_checkout_success", session_id=session_id)
-                return redirect(f'https://new.casspea.co.uk/checkout/success?session_id={session_id}')
+                return redirect(f'https://www.casspea.co.uk/checkout/success?session_id={session_id}')
             else:
                 logger.warning("Payment not completed for session", session_id=session_id)
-                return redirect(f'https://new.casspea.co.uk/checkout/error?session_id={session_id}')
+                return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
         except stripe.error.StripeError as e:
             logger.error("Stripe API error", error=str(e))
-            return redirect(f'https://new.casspea.co.uk/checkout/error?session_id={session_id}')
+            return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
 
 class StripeCancelView(APIView):
     """
@@ -276,4 +276,4 @@ class StripeCancelView(APIView):
         else:
             logger.error("Missing session_id in request")
 
-        return redirect(f'https://new.casspea.co.uk/checkout/error?session_id={session_id}')
+        return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
