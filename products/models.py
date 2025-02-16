@@ -91,7 +91,7 @@ class Product(models.Model):
         return self.name
 
     class Meta:
-        ordering = ['base_price']
+        ordering = ['category__id', 'base_price']
 
     def create_webp_version(self, image_field, webp_field, is_thumbnail=False):
         """Create WebP version of the image"""
