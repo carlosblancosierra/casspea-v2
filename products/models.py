@@ -285,41 +285,6 @@ class ProductGalleryImage(models.Model):
             save=False
         )
 
-    def save(self, *args, **kwargs):
-        if self.order is None:
-            # If no order specified, put it at the end
-            max_order = ProductGalleryImage.objects.filter(product=self.product).aggregate(
-                models.Max('order'))['order__max']
-            self.order = 0 if max_order is None else max_order + 1
-        
-        # Handle image ordering
-        with transaction.atomic():
-            if not self.pk:  # New image
-                # Shift all images with order >= self.order up by 1
-                ProductGalleryImage.objects.filter(
-                    product=self.product,
-                    order__gte=self.order
-                ).update(order=models.F('order') + 1)
-            else:  # Existing image
-                old_instance = ProductGalleryImage.objects.get(pk=self.pk)
-                if old_instance.order != self.order:
-                    if old_instance.order < self.order:
-                        # Moving image to a higher order
-                        # Shift images between old and new position down
-                        ProductGalleryImage.objects.filter(
-                            product=self.product,
-                            order__gt=old_instance.order,
-                            order__lte=self.order
-                        ).exclude(pk=self.pk).update(order=models.F('order') - 1)
-                    else:
-                        # Moving image to a lower order
-                        # Shift images between new and old position up
-                        ProductGalleryImage.objects.filter(
-                            product=self.product,
-                            order__gte=self.order,
-                            order__lt=old_instance.order
-                        ).exclude(pk=self.pk).update(order=models.F('order') + 1)
-
         # Process images
         if self.pk:
             original = ProductGalleryImage.objects.get(pk=self.pk)
@@ -336,8 +301,6 @@ class ProductGalleryImage(models.Model):
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        old_order = self.order
-
         # Delete image files
         if self.image:
             self.image.delete()
@@ -347,12 +310,3 @@ class ProductGalleryImage(models.Model):
             self.thumbnail.delete()
         if self.thumbnail_webp:
             self.thumbnail_webp.delete()
-
-        # Reorder remaining images
-        with transaction.atomic():
-            ProductGalleryImage.objects.filter(
-                product=self.product,
-                order__gt=old_order
-            ).update(order=models.F('order') - 1)
-
-            super().delete(*args, **kwargs)
