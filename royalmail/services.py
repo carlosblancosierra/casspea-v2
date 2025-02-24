@@ -51,12 +51,12 @@ class RoyalMailService:
         # Determine package format based on service code.
         service_code = order.checkout_session.shipping_option.service_code
         # Use a mapping for service codes to package formats.
-        package_mapping = {
-            "TPS48": "parcel", 
-            "TPS24": "parcel", 
-            "SD1": "parcel", 
-        }
-        package_format = package_mapping.get(service_code, "smallParcel")
+        # package_mapping = {
+        #     "TPS48": "parcel", 
+        #     "TPN24": "parcel", 
+        #     "SD1": "parcel", 
+        # }
+        package_format = "parcel"
 
         # Build packages data
         packages = []
