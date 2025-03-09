@@ -46,6 +46,9 @@ class ProductSerializer(serializers.ModelSerializer):
             'thumbnail',
             'thumbnail_webp',
             'gallery_images',
+            'preorder',
+            'preorder_price',
+            'preorder_finish_date',
             'created',
             'updated'
         ]
