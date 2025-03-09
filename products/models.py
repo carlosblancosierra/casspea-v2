@@ -55,6 +55,10 @@ class Product(models.Model):
     seo_title = models.CharField(max_length=255)
     seo_description = models.CharField(max_length=255)
 
+    preorder = models.BooleanField(default=False)
+    preorder_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    preorder_finish_date = models.DateField(null=True, blank=True)
+
     image = models.ImageField(
         upload_to='flavours',
         storage=s3_storage,
