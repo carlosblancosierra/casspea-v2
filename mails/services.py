@@ -9,13 +9,14 @@ from django.conf import settings
 
 class PendingCheckoutSessionsMailProcessor:
     def get_pending_checkout_sessions(self):
-        one_day_ago = timezone.now() - timedelta(days=1)
+        time_delta = timezone.now() - timedelta(days=7)
+        
         email_type, _ = EmailType.objects.get_or_create(
             name='non_payed_order',
             defaults={'template_name': 'mails/order_not_paid.html'}
         )
         sessions = CheckoutSession.objects.filter(
-            created__gte=one_day_ago,
+            created__gte=time_delta,
             payment_status__in=[
                 CheckoutSession.Status.PENDING,
                 CheckoutSession.Status.FAILED,
