@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'storages',
     'django_filters',
+    'django_q',
 
     # Custom apps
     'allergens',
@@ -190,6 +191,15 @@ CORS_ALLOWED_ORIGINS = [
     'https://new.casspea.co.uk',
 ]
 
+if DEBUG:
+    ALLOWED_HOSTS += ['localhost', '127.0.0.1']
+    CORS_ALLOWED_ORIGINS += [
+        'http://localhost:3000',
+        'http://localhost:3005',  # Added to match your frontend origin.
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3005',  # Extra spaces removed.
+    ]
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
@@ -225,13 +235,10 @@ if not DEBUG:
     SESSION_COOKIE_HTTPONLY = True
 else:
     # Development settings
-    CORS_ALLOWED_ORIGINS += [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-    ]
     CSRF_TRUSTED_ORIGINS += [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
+        'http://127.0.0.1:3005',
     ]
     CSRF_COOKIE_SECURE = False
     SESSION_COOKIE_SECURE = False
