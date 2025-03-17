@@ -487,3 +487,17 @@ if IS_HEROKU:
 
 ROYAL_MAIL_API_KEY = env('ROYAL_MAIL_API_KEY')
 ROYAL_MAIL_BASE_URL = 'https://api.parcel.royalmail.com/api/v1'
+
+
+Q_CLUSTER = {
+    'name': 'casspea',
+    'workers': 4,
+    'recycle': 500,
+    'timeout': 60,
+    'compress': True,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'cpu_affinity': 1,
+    'label': 'CassPea Q',
+    'orm': 'default',
+}
