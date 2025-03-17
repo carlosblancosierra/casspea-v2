@@ -71,7 +71,7 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'storages',
     'django_filters',
-
+    'django_q',
     # Custom apps
     'allergens',
     'addresses',
