@@ -17,4 +17,4 @@ rest_framework_simplejwt
 djoser
 django-filter
 watchtower
-django_q
+django-q
