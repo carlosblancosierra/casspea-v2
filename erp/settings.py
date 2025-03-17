@@ -491,7 +491,7 @@ ROYAL_MAIL_BASE_URL = 'https://api.parcel.royalmail.com/api/v1'
 
 Q_CLUSTER = {
     'name': 'casspea',
-    'workers': 4,
+    'workers': 1,
     'recycle': 500,
     'timeout': 60,
     'compress': True,
