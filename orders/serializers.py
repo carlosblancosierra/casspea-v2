@@ -3,10 +3,10 @@ from .models import Order
 from checkout.models import CheckoutSession
 from addresses.serializers import AddressSerializer
 from carts.models import CartItem
-from carts.models import Cart, CartItemBoxCustomization, CartItemBoxFlavorSelection
+from carts.models import Cart, CartItemBoxFlavorSelection
 from products.models import Product
 from checkout.models import ShippingOption
-
+from carts.serializers import CartItemBoxCustomizationSerializer
 class OrderProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
@@ -27,13 +27,6 @@ class CartItemBoxFlavorSelectionSerializer(serializers.ModelSerializer):
         model = CartItemBoxFlavorSelection
         fields = ['id', 'flavor_name', 'quantity']
 
-
-class CartItemBoxCustomizationSerializer(serializers.ModelSerializer):
-    flavor_selections = CartItemBoxFlavorSelectionSerializer(many=True)
-
-    class Meta:
-        model = CartItemBoxCustomization
-        fields = ['id', 'selection_type', 'allergens', 'flavor_selections']
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = OrderProductSerializer()
