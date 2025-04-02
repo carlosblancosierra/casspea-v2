@@ -266,6 +266,7 @@
                                     <tr>
                                         <td style="padding: 4px 0;">Shipping</td>
                                         <td style="text-align: right;">£{{ order.checkout_session.shipping_cost_pounds }}</td>
+                                        
                                     </tr>
                                     <tr style="font-weight: bold;">
                                         <td style="padding: 4px 0; border-top: 1px solid #eee;">Total</td>
@@ -287,8 +288,8 @@
             {% if order.shipping_address.county %}, {{ order.shipping_address.county }}{% endif %}
             <br>{{ order.shipping_address.postcode }}
             <br>{{ order.shipping_address.country }}</p>
-            <p><strong>Shipping Date:</strong> {% if order.checkout_session.cart.shipping_date %}{{ order.checkout_session.cart.shipping_date|date:"F j, Y" }}{% else %}ASAP{% endif %}</p>
-
+            <p style="color:rgb(215, 28, 28);"><strong>Shipping Date:</strong> {{ order.checkout_session.cart.shipping_date }}</p>
+            <p>This is our target dispatch date for your order. Please note that actual delivery times may vary depending on the shipping method you&apos;ve chosen and current Royal Mail service levels.</p>
             <h2>Billing Information</h2>
             <p><strong>Billing Address:</strong><br>
             {{ order.billing_address.full_name }}<br>

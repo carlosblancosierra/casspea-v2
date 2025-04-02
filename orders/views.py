@@ -3,6 +3,9 @@ from rest_framework import generics, permissions
 from .models import Order
 from .serializers import OrderListSerializer
 from users.authentication import CustomJWTAuthentication
+from django.utils import timezone
+from datetime import timedelta
+from datetime import datetime
 
 class OrderListView(generics.ListAPIView):
     """
@@ -13,9 +16,19 @@ class OrderListView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
     authentication_classes = [CustomJWTAuthentication]
     ordering = ['-created']
-
+    
     def get_queryset(self):
-        return Order.objects.select_related(
+        # Get the days parameter from query params, default to 15 if not provided or invalid.
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        try:
+            start_date = timezone.make_aware(datetime.strptime(start_date, '%Y-%m-%d'))
+            end_date = timezone.make_aware(datetime.strptime(end_date, '%Y-%m-%d'))
+        except ValueError:
+            start_date = timezone.now() - timedelta(days=10)
+            end_date = timezone.now()
+
+        return Order.objects.filter(created__range=(start_date, end_date)).select_related(
             'checkout_session',
             'checkout_session__cart',
             'checkout_session__shipping_address',
