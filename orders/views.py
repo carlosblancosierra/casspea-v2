@@ -19,15 +19,10 @@ class OrderListView(generics.ListAPIView):
     
     def get_queryset(self):
         # Get the days parameter from query params, default to 15 if not provided or invalid.
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        try:
-            start_date = timezone.make_aware(datetime.strptime(start_date, '%Y-%m-%d'))
-            end_date = timezone.make_aware(datetime.strptime(end_date, '%Y-%m-%d'))
-        except ValueError:
-            start_date = timezone.now() - timedelta(days=10)
-            end_date = timezone.now()
 
+        start_date = timezone.now() - timedelta(days=10)
+        end_date = timezone.now()
+    
         return Order.objects.filter(created__range=(start_date, end_date)).select_related(
             'checkout_session',
             'checkout_session__cart',
