@@ -32,8 +32,12 @@ class OrderListView(generics.ListAPIView):
         ).prefetch_related(
             'status_history',
             'checkout_session__cart__items',
-            'checkout_session__cart__items__product'
-        )
+            'checkout_session__cart__items__product',
+            'checkout_session__cart__items__box_customization',
+            'checkout_session__cart__items__box_customization__flavor_selections',
+            'checkout_session__cart__items__box_customization__flavor_selections__flavor',
+            'checkout_session__cart__items__box_customization__allergens'
+        ).order_by('-created')
 
 class OrderDetailView(generics.RetrieveAPIView):
     """
@@ -56,5 +60,9 @@ class OrderDetailView(generics.RetrieveAPIView):
         ).prefetch_related(
             'status_history',
             'checkout_session__cart__items',
-            'checkout_session__cart__items__product'
+            'checkout_session__cart__items__product',
+            'checkout_session__cart__items__box_customization',
+            'checkout_session__cart__items__box_customization__flavor_selections',
+            'checkout_session__cart__items__box_customization__allergens',
+            'checkout_session__cart__discount'
         )
