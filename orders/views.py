@@ -22,6 +22,16 @@ class OrderListView(generics.ListAPIView):
 
         start_date = timezone.now() - timedelta(days=10)
         end_date = timezone.now()
+
+        if self.request.query_params.get('start_date'):
+            start_date = datetime.strptime(self.request.query_params.get('start_date'), '%Y-%m-%d')
+            start_date = timezone.make_aware(start_date)
+            if self.request.query_params.get('end_date'):
+                end_date = datetime.strptime(self.request.query_params.get('end_date'), '%Y-%m-%d')
+                end_date = timezone.make_aware(end_date)
+
+        print("start_date", start_date)
+        print("end_date", end_date)
     
         return Order.objects.filter(created__range=(start_date, end_date)).select_related(
             'checkout_session',
