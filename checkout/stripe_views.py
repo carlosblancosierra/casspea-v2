@@ -113,9 +113,7 @@ class StripeCheckoutSessionView(APIView):
                     'price': item.product.stripe_price_id,
                     'quantity': item.quantity,
                     'adjustable_quantity': {
-                        'enabled': True,
-                        'minimum': 1,
-                        'maximum': 100,
+                        'enabled': False,
                     },
                 })
 
