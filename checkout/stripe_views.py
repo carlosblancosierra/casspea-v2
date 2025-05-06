@@ -5,9 +5,7 @@ from django.shortcuts import redirect
 from django.conf import settings
 from checkout.models import CheckoutSession
 from rest_framework.exceptions import ValidationError
-from carts.models import Cart
-from django.core.mail import send_mail
-
+from checkout.stripe_utils import prepare_stripe_payload
 import stripe
 import structlog
 from datetime import timedelta
@@ -275,3 +273,51 @@ class StripeCancelView(APIView):
             logger.error("Missing session_id in request")
 
         return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
+
+
+class StripeCheckoutSessionEmbeddedView(StripeCheckoutSessionView):
+    """
+    """
+    def post(self, request, *args, **kwargs):
+        try:
+            session = CheckoutSession.objects.get_or_create_from_request(request)
+            if not session.shipping_address:
+                raise ValidationError("Shipping address is required")
+
+            payload = prepare_stripe_payload(session, embedded=True)
+            stripe_sess = stripe.checkout.Session.create(**payload)
+
+            session.stripe_session_id = stripe_sess.id
+            session.save()
+
+            return Response({"clientSecret": stripe_sess.client_secret}, status=200)
+
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=400)
+        except stripe.error.StripeError:
+            return Response({"error": "Unable to create checkout session"}, status=500)
+        except Exception:
+            return Response({"error": "An unexpected error occurred"}, status=500)
+
+
+class StripeCheckoutResultView(APIView):
+    """
+    """
+    
+    def get(self, request, *args, **kwargs):
+        session_id = request.GET.get('session_id')
+        if not session_id:
+            logger.error("Missing session_id in request")
+            return Response({"error": "Missing session_id in request"}, status=400)
+
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            return Response({"status": session.status, "customer_email": session.customer_details.email}, status=200)
+
+        except stripe.error.StripeError as e:
+            logger.error("Stripe API error", error=str(e))
+            return Response({"error": "Stripe API error"}, status=500)
+
+        except Exception as e:
+            logger.error("An unexpected error occurred", error=str(e))
+            return Response({"error": "An unexpected error occurred"}, status=500)
