@@ -125,12 +125,43 @@ class CartItemBoxCustomization(models.Model):
 
     def __str__(self):
         return f"{self.cart_item.product.name} Box Customization"
+    
 
+class CartItemPackCustomization(models.Model):
+    SELECTION_TYPE_CHOICES = [
+        ('RANDOM', 'Random'),
+        ('PICK_AND_MIX', 'Pick and Mix'),
+    ]
+
+    cart_item = models.OneToOneField(CartItem, related_name='pack_customization', on_delete=models.CASCADE)
+    selection_type = models.CharField(max_length=20, choices=SELECTION_TYPE_CHOICES)
+    allergens = models.ManyToManyField(Allergen, blank=True)
+
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    hot_chocolate = models.ForeignKey(Product, on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='hot_chocolate_pack_customizations')
+    gift_card = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='gift_card_pack_customizations')
+    chocolate_bark = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='chocolate_bark_pack_customizations')
+    
 class CartItemBoxFlavorSelection(models.Model):
     box_customization = models.ForeignKey(
         CartItemBoxCustomization,
         related_name='flavor_selections',
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    pack_customization = models.ForeignKey(
+        CartItemPackCustomization,
+        related_name='flavor_selections',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
     )
     flavor = models.ForeignKey(Flavour, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
@@ -140,3 +171,5 @@ class CartItemBoxFlavorSelection(models.Model):
 
     def __str__(self):
         return f"{self.flavor.name} x {self.quantity} in {self.box_customization}"
+    
+

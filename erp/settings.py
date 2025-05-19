@@ -190,9 +190,22 @@ CORS_ALLOWED_ORIGINS = [
     'https://new.casspea.co.uk',
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://casspea.co.uk',
+    'https://www.casspea.co.uk',
+    'https://dev.d29kjbfnh50hd9.amplifyapp.com',
+    'https://new.casspea.co.uk',
+]
+
 if DEBUG:
     ALLOWED_HOSTS += ['localhost', '127.0.0.1']
     CORS_ALLOWED_ORIGINS += [
+        'http://localhost:3000',
+        'http://localhost:3005',  # Added to match your frontend origin.
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3005',  # Extra spaces removed.
+    ]
+    CSRF_TRUSTED_ORIGINS += [
         'http://localhost:3000',
         'http://localhost:3005',  # Added to match your frontend origin.
         'http://127.0.0.1:3000',
@@ -202,12 +215,8 @@ if DEBUG:
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://casspea.co.uk',
-    'https://www.casspea.co.uk',
-    'https://dev.d29kjbfnh50hd9.amplifyapp.com',
-    'https://new.casspea.co.uk',
-]
+
+
 
 # Cookie Settings
 # ------------------------------------------------------------------------------
@@ -235,8 +244,7 @@ if not DEBUG:
 else:
     # Development settings
     CSRF_TRUSTED_ORIGINS += [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
+        'http://localhost:3005',
         'http://127.0.0.1:3005',
     ]
     CSRF_COOKIE_SECURE = False

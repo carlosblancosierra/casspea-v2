@@ -3,7 +3,13 @@ from flavours.models import Flavour
 from flavours.serializers import FlavourSerializer
 from allergens.models import Allergen
 from allergens.serializers import AllergenSerializer
-from .models import Cart, CartItem, CartItemBoxCustomization, CartItemBoxFlavorSelection
+from .models import (
+    Cart,
+    CartItem,
+    CartItemBoxCustomization,
+    CartItemBoxFlavorSelection,
+    CartItemPackCustomization,
+)
 from products.models import Product
 from products.serializers import ProductSerializer
 from discounts.serializers import DiscountSerializer
@@ -25,9 +31,26 @@ class CartItemBoxCustomizationSerializer(serializers.ModelSerializer):
         model = CartItemBoxCustomization
         fields = ['id', 'selection_type', 'allergens', 'flavor_selections']
 
+class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
+    allergens = AllergenSerializer(many=True)
+    flavor_selections = CartItemBoxFlavorSelectionSerializer(many=True)
+    
+    class Meta:
+        model = CartItemPackCustomization
+        fields = [
+            'id',
+            'selection_type',
+            'allergens',
+            'flavor_selections',
+            'hot_chocolate',
+            'gift_card',
+            'chocolate_bark',
+        ]
+
 class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer()
     box_customization = CartItemBoxCustomizationSerializer()
+    pack_customization = CartItemPackCustomizationSerializer()
     base_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discounted_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     savings = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -39,6 +62,7 @@ class CartItemSerializer(serializers.ModelSerializer):
             'quantity',
             'product',
             'box_customization',
+            'pack_customization',
             'base_price',
             'discounted_price',
             'savings'
@@ -109,18 +133,35 @@ class CartItemBoxCustomizationCreateSerializer(serializers.ModelSerializer):
         model = CartItemBoxCustomization
         fields = ['selection_type', 'allergens', 'flavor_selections']
 
+class CartItemPackCustomizationCreateSerializer(serializers.ModelSerializer):
+    flavor_selections = CartItemBoxFlavorSelectionCreateSerializer(many=True, required=False)
+    allergens = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Allergen.objects.all(),
+        required=False
+    )
+
+    class Meta:
+        model = CartItemPackCustomization
+        fields = ['selection_type', 'allergens', 'flavor_selections', 'hot_chocolate', 'gift_card', 'chocolate_bark']
+
 class CartItemCreateSerializer(serializers.ModelSerializer):
     box_customization = CartItemBoxCustomizationCreateSerializer(required=False)
+    pack_customization = CartItemPackCustomizationCreateSerializer(required=False)
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
 
     class Meta:
         model = CartItem
-        fields = ['product', 'quantity', 'box_customization']
+        fields = ['product', 'quantity', 'box_customization', 'pack_customization']
 
     def validate(self, data):
         """Validate the complete data set"""
         product = data['product']
         box_customization = data.get('box_customization', None)
+        pack_customization = data.get('pack_customization', None)
+
+        if box_customization and pack_customization:
+            raise serializers.ValidationError("Cannot provide both box_customization and pack_customization.")
 
         if box_customization:
             # Only validate flavor selections for PICK_AND_MIX
@@ -146,46 +187,38 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        """Create a cart item"""
-        # Initialize variables
-        box_customization_data = None
-        flavor_selections_data = []
-        allergens_data = []
+        box_customization_data = validated_data.pop('box_customization', None)
+        pack_customization_data = validated_data.pop('pack_customization', None)
 
-        # Pop optional box customization data if it exists
-        if 'box_customization' in validated_data:
-            box_customization_data = validated_data.pop('box_customization')
-            flavor_selections_data = box_customization_data.pop('flavor_selections', [])
-            allergens_data = box_customization_data.pop('allergens', [])
+        if box_customization_data and pack_customization_data:
+            raise serializers.ValidationError("Cannot provide both box_customization and pack_customization.")
 
-        # Create cart item
         cart_item = CartItem.objects.create(**validated_data)
 
-        # Create box customization and related data only if box_customization_data exists
         if box_customization_data:
-            # Create box customization
-            box_customization = CartItemBoxCustomization.objects.create(
-                cart_item=cart_item,
-                **box_customization_data
-            )
-
-            # Add allergens if any
+            flavor_selections_data = box_customization_data.pop('flavor_selections', [])
+            allergens_data = box_customization_data.pop('allergens', [])
+            box_customization = CartItemBoxCustomization.objects.create(cart_item=cart_item, **box_customization_data)
             if allergens_data:
                 box_customization.allergens.set(allergens_data)
-
-            # Create flavor selections
             for flavor_data in flavor_selections_data:
-                CartItemBoxFlavorSelection.objects.create(
-                    box_customization=box_customization,
-                    **flavor_data
-                )
+                CartItemBoxFlavorSelection.objects.create(box_customization=box_customization, **flavor_data)
+
+        if pack_customization_data:
+            flavor_selections_data = pack_customization_data.pop('flavor_selections', [])
+            allergens_data = pack_customization_data.pop('allergens', [])
+            pack_customization = CartItemPackCustomization.objects.create(cart_item=cart_item, **pack_customization_data)
+            if allergens_data:
+                pack_customization.allergens.set(allergens_data)
+            for flavor_data in flavor_selections_data:
+                CartItemBoxFlavorSelection.objects.create(pack_customization=pack_customization, **flavor_data)
 
         return cart_item
 
     def update(self, instance, validated_data):
         box_customization_data = validated_data.pop('box_customization', None)
+        pack_customization_data = validated_data.pop('pack_customization', None)
 
-        # Update cart item fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -194,7 +227,6 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
             box_customization = instance.box_customization
             flavor_selections_data = box_customization_data.pop('flavor_selections', None)
 
-            # Update box customization
             for attr, value in box_customization_data.items():
                 if attr == 'allergens':
                     box_customization.allergens.set(value)
@@ -203,14 +235,27 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
             box_customization.save()
 
             if flavor_selections_data:
-                # Delete existing flavor selections
                 box_customization.flavor_selections.all().delete()
-                # Create new flavor selections
                 for flavor_data in flavor_selections_data:
-                    CartItemBoxFlavorSelection.objects.create(
-                        box_customization=box_customization,
-                        **flavor_data
-                    )
+                    CartItemBoxFlavorSelection.objects.create(box_customization=box_customization, **flavor_data)
+
+        if pack_customization_data:
+            try:
+                pack_customization = instance.pack_customization
+            except CartItemPackCustomization.DoesNotExist:
+                pack_customization = CartItemPackCustomization.objects.create(cart_item=instance, **pack_customization_data)
+            else:
+                flavor_selections_data = pack_customization_data.pop('flavor_selections', None)
+                for attr, value in pack_customization_data.items():
+                    if attr == 'allergens':
+                        pack_customization.allergens.set(value)
+                    else:
+                        setattr(pack_customization, attr, value)
+                pack_customization.save()
+                if flavor_selections_data:
+                    pack_customization.flavor_selections.all().delete()
+                    for flavor_data in flavor_selections_data:
+                        CartItemBoxFlavorSelection.objects.create(pack_customization=pack_customization, **flavor_data)
 
         return instance
 

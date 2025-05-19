@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Cart, CartItem, CartItemBoxCustomization, CartItemBoxFlavorSelection
+from .models import Cart, CartItem, CartItemBoxCustomization, CartItemBoxFlavorSelection, CartItemPackCustomization
 
 class CartItemBoxFlavorSelectionInline(admin.TabularInline):
     model = CartItemBoxFlavorSelection
@@ -66,10 +66,20 @@ class CartItemBoxCustomizationAdmin(admin.ModelAdmin):
     readonly_fields = ['created', 'updated']
     inlines = [CartItemBoxFlavorSelectionInline]
 
+
+class CartItemPackCustomizationAdmin(admin.ModelAdmin):
+    list_display = ['id', 'cart_item', 'selection_type', 'created', 'updated']
+    list_filter = ['selection_type', 'created', 'updated']
+    search_fields = ['cart_item__cart__session_id']
+    readonly_fields = ['created', 'updated']
+    inlines = [CartItemBoxFlavorSelectionInline]
+    autocomplete_fields = ['cart_item']
+
+
 class CartItemAdmin(admin.ModelAdmin):
     list_display = ['id', 'cart', 'product', 'quantity', 'created', 'updated']
     list_filter = ['created', 'updated']
-    search_fields = ['cart__session_id', 'product__name']
+    search_fields = ['cart__session_id', 'product__name', 'id']
     readonly_fields = ['created', 'updated']
     inlines = [CartItemBoxCustomizationInline]
 
@@ -85,3 +95,4 @@ class CartItemAdmin(admin.ModelAdmin):
 
 admin.site.register(CartItemBoxCustomization, CartItemBoxCustomizationAdmin)
 admin.site.register(CartItem, CartItemAdmin)
+admin.site.register(CartItemPackCustomization, CartItemPackCustomizationAdmin)
