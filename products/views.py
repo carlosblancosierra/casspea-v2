@@ -18,7 +18,7 @@ class ProductDetailView(RetrieveAPIView):
 
 
 class ProductCategoryListView(ListAPIView):
-    queryset = ProductCategory.objects.all()
+    queryset = ProductCategory.objects.filter(active=True)
     serializer_class = ProductCategorySerializer
 
     def get(self, request, *args, **kwargs):
@@ -28,5 +28,5 @@ class ProductCategoryListView(ListAPIView):
 
 class ProductCategoryDetailView(RetrieveAPIView):
     lookup_field = 'slug'
-    queryset = ProductCategory.objects.all()
+    queryset = ProductCategory.objects.filter(active=True)
     serializer_class = ProductCategorySerializer
