@@ -9,9 +9,11 @@ import os
 
 s3_storage = S3Boto3Storage(location='media')
 
+
 class ProductCategoryManager(models.Manager):
     def active(self):
         return self.filter(active=True)
+
 
 class ProductCategory(models.Model):
     name = models.CharField(max_length=255)
@@ -23,6 +25,33 @@ class ProductCategory(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
+    image = models.ImageField(
+        upload_to='flavours',
+        storage=s3_storage,
+        help_text="Main product image",
+        null=True,
+        blank=True
+    )
+    image_webp = models.ImageField(
+        upload_to='products/images/%Y/%m/',
+        help_text="WebP version of main image",
+        blank=True,
+        null=True
+    )
+    # Thumbnails
+    thumbnail = models.ImageField(
+        upload_to='products/thumbnails/%Y/%m/',
+        help_text="Thumbnail image (JPEG)",
+        blank=True,
+        null=True
+    )
+    thumbnail_webp = models.ImageField(
+        upload_to='products/thumbnails/%Y/%m/',
+        help_text="Thumbnail image (WebP)",
+        blank=True,
+        null=True
+    )
+
     objects = ProductCategoryManager()
 
     def __str__(self):
@@ -32,6 +61,7 @@ class ProductCategory(models.Model):
 class ProductManager(models.Manager):
     def active(self):
         return self.filter(active=True)
+
 
 class Product(models.Model):
     name = models.CharField(max_length=255)
@@ -191,6 +221,7 @@ class Product(models.Model):
         if self.thumbnail_webp:
             self.thumbnail_webp.delete()
         super().delete(*args, **kwargs)
+
 
 class ProductGalleryImage(models.Model):
     product = models.ForeignKey(

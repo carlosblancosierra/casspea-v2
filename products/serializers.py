@@ -1,10 +1,24 @@
 from rest_framework import serializers
 from .models import Product, ProductCategory, ProductGalleryImage
 
+
+class ProductCategoryShallowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductCategory
+        fields = ['id', 'name', 'slug']  # Only the essentials
+
+
 class ProductCategorySerializer(serializers.ModelSerializer):
+    products = serializers.SerializerMethodField()
+
+    def get_products(self, obj):
+        products = Product.objects.filter(category=obj, active=True)
+        return ProductSerializer(products, many=True).data
+
     class Meta:
         model = ProductCategory
         fields = '__all__'
+
 
 class ProductGalleryImageSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,8 +33,9 @@ class ProductGalleryImageSerializer(serializers.ModelSerializer):
             'order'
         ]
 
+
 class ProductSerializer(serializers.ModelSerializer):
-    category = ProductCategorySerializer()
+    category = ProductCategoryShallowSerializer()
     gallery_images = ProductGalleryImageSerializer(many=True, read_only=True)
 
     class Meta:

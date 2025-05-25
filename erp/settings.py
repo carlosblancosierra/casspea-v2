@@ -17,6 +17,7 @@ import logging
 import structlog
 import dj_database_url
 import sys
+import json
 
 # Initialize environ
 env = environ.Env()
@@ -41,7 +42,6 @@ IS_HEROKU = 'DYNO' in os.environ
 # SECURITY WARNING: keep the secret key used in production secret!
 # Try to get from environment first, then from env file
 SECRET_KEY = os.getenv('SECRET_KEY', 'as78fd6s%dg766782f6D6AS$7F68asf87')
-
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
@@ -216,8 +216,6 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 
-
-
 # Cookie Settings
 # ------------------------------------------------------------------------------
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
@@ -285,23 +283,25 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Logging configuration
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'json_formatter': {
-            '()': structlog.stdlib.ProcessorFormatter,
-            'processor': structlog.processors.JSONRenderer(),
-        },
         'plain_console': {
             '()': structlog.stdlib.ProcessorFormatter,
             'processor': structlog.dev.ConsoleRenderer(),
+        },
+        'json': {
+            '()': structlog.stdlib.ProcessorFormatter,
+            'processor': structlog.processors.JSONRenderer(),
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'json_formatter',
+            # Use 'plain_console' for pretty logs locally, 'json' for JSON logs in prod
+            'formatter': 'json' if not DEBUG else 'plain_console',
         },
     },
     'loggers': {
@@ -316,13 +316,12 @@ LOGGING = {
         },
         'django.server': {
             'handlers': ['console'],
-            'level': 'WARNING',
+            'level': 'INFO',
             'propagate': False,
         },
     }
 }
 
-# Structlog configuration
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -333,7 +332,7 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer()
+        structlog.processors.JSONRenderer() if not DEBUG else structlog.dev.ConsoleRenderer()
     ],
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -439,7 +438,7 @@ DEFAULT_FROM_EMAIL_NAME = 'CassPea'
 CONTACT_EMAIL = 'info@casspea.co.uk'
 SERVER_EMAIL = 'errors@casspea.co.uk'
 ADMINS = [('Carlos Blanco', 'carlosblancosierra@gmail.com')]
-STAFF_EMAILS = ['info@casspea.co.uk', 'sandy.gomezc@gmail.com','carlosblancosierra@gmail.com']
+STAFF_EMAILS = ['info@casspea.co.uk', 'sandy.gomezc@gmail.com', 'carlosblancosierra@gmail.com']
 
 # Site URL for tracking
 SITE_URL = 'https://casspea.co.uk'
@@ -489,7 +488,7 @@ else:
 
 # Add Heroku logging configuration
 if IS_HEROKU:
-    LOGGING['handlers']['console']['formatter'] = 'json_formatter'
+    LOGGING['handlers']['console']['formatter'] = 'json'
     LOGGING['loggers']['django']['level'] = 'WARNING'
     LOGGING['loggers']['django.server']['level'] = 'WARNING'
 
