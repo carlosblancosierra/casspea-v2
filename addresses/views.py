@@ -5,6 +5,9 @@ from .models import Address
 from .serializers import AddressSerializer
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from checkout.models import CheckoutSession
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAdminUser
+from collections import Counter
 
 import structlog
 
@@ -41,6 +44,7 @@ BILLING_ADDRESS_EXAMPLE = {
     "longitude": -0.1278,
     "address_type": "BILLING"
 }
+
 
 class AddressViewSet(viewsets.ModelViewSet):
     serializer_class = AddressSerializer
@@ -175,3 +179,26 @@ class AddressViewSet(viewsets.ModelViewSet):
                 {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class PostalCodeStatsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        if not request.user.is_superuser:
+            return Response({'detail': 'Not authorized.'}, status=403)
+
+        paid_orders = CheckoutSession.objects.filter(
+            payment_status=CheckoutSession.Status.PAID
+        ).select_related('billing_address', 'shipping_address')
+
+        postcodes = []
+        for order in paid_orders:
+            if order.billing_address and order.billing_address.postcode:
+                postcodes.append(order.billing_address.postcode)
+            if order.shipping_address and order.shipping_address.postcode:
+                postcodes.append(order.shipping_address.postcode)
+        postcode_counts = Counter(postcodes)
+        # Return as a list of dicts for easier frontend use
+        result = [{"postcode": k, "count": v} for k, v in postcode_counts.items()]
+        return Response(result)
