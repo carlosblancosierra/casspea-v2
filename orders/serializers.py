@@ -3,10 +3,13 @@ from .models import Order
 from checkout.models import CheckoutSession
 from addresses.serializers import AddressSerializer
 from carts.models import CartItem
-from carts.models import Cart, CartItemBoxFlavorSelection
+from carts.models import Cart, CartItemBoxFlavorSelection, CartItemPackCustomization
 from products.models import Product
 from checkout.models import ShippingOption
 from carts.serializers import CartItemBoxCustomizationSerializer
+from carts.models import CartItemPackCustomization
+
+
 class OrderProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
@@ -20,6 +23,7 @@ class OrderProductSerializer(serializers.ModelSerializer):
             'thumbnail',
         ]
 
+
 class CartItemBoxFlavorSelectionSerializer(serializers.ModelSerializer):
     flavor_name = serializers.CharField(source='flavor.name')
 
@@ -28,9 +32,16 @@ class CartItemBoxFlavorSelectionSerializer(serializers.ModelSerializer):
         fields = ['id', 'flavor_name', 'quantity']
 
 
+class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CartItemPackCustomization
+        fields = '__all__'
+
+
 class CartItemSerializer(serializers.ModelSerializer):
     product = OrderProductSerializer()
     box_customization = CartItemBoxCustomizationSerializer()
+    pack_customization = CartItemPackCustomizationSerializer()
     base_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discounted_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     savings = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -42,10 +53,12 @@ class CartItemSerializer(serializers.ModelSerializer):
             'quantity',
             'product',
             'box_customization',
+            'pack_customization',
             'base_price',
             'discounted_price',
             'savings'
         ]
+
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
@@ -72,10 +85,12 @@ class CartSerializer(serializers.ModelSerializer):
     def get_total(self, obj):
         return str(sum(item.quantity * item.product.base_price for item in obj.items.all()))
 
+
 class ShippingOptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShippingOption
         fields = ['id', 'name', 'price']
+
 
 class CheckoutSessionSerializer(serializers.ModelSerializer):
     shipping_address = AddressSerializer()
@@ -123,8 +138,10 @@ class CheckoutSessionSerializer(serializers.ModelSerializer):
     def get_shipping_stripe_format(self, obj):
         return obj.shipping_stripe_format
 
+
 class OrderListSerializer(serializers.ModelSerializer):
     checkout_session = CheckoutSessionSerializer()
+
     class Meta:
         model = Order
         fields = '__all__'
