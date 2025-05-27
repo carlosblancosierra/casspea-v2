@@ -160,20 +160,17 @@
                 <img src="https://www.casspea.co.uk/static/images/logo-gray.png" alt="CassPea Logo" style="display: block; margin: 0 auto;">
             </a>
         </div>
-
         <!-- Hero Section -->
         <div class="hero">
             <h1>Your Order has been Confirmed!</h1>
             <p>Thank you for shopping with us. Your order is now being processed.</p>
             {% comment %} <a href="https://www.casspea.co.uk/" class="button">View Your Order</a> {% endcomment %}
         </div>
-
         <!-- Content Section -->
         <div class="content">
             <h2>Order Details</h2>
             <p><strong>Order ID:</strong> {{ order.order_id }}</p>
             <p><strong>Order Date:</strong> {{ order.created|date:"F j, Y, g:i a" }}</p>
-
             <div class="order-summary">
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
@@ -186,56 +183,48 @@
                             <div style="margin-bottom: 8px;">
                                 <strong>{{ item.quantity }}x {{ item.product.name }}</strong>
                             </div>
-
-                            <!-- Selection Type Badge -->
-                            {% if item.box_customization %}
-                            <div style="margin-bottom: 8px;">
-                                <span style="
-                                    background-color: #f3f4f6;
-                                    padding: 4px 8px;
-                                    border-radius: 4px;
-                                    font-size: 12px;
-                                    color: #4b5563;
-                                    border: 1px solid #e5e7eb;
-                                ">
-                                    {% if item.box_customization.selection_type == 'PICK_AND_MIX' %}
-                                        Pick & Mix
-                                    {% elif item.box_customization.selection_type == 'RANDOM' %}
-                                        Surprise Me
+                            {% with customization=item.box_customization|default:item.pack_customization %}
+                                {% if customization %}
+                                    <div style="margin-bottom: 8px;">
+                                        <span style="background-color: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #4b5563; border: 1px solid #e5e7eb;">
+                                            {% if customization.selection_type == 'PICK_AND_MIX' %}
+                                                Pick & Mix
+                                            {% elif customization.selection_type == 'RANDOM' %}
+                                                Surprise Me
+                                            {% endif %}
+                                        </span>
+                                        {% if customization.allergens %}
+                                            {% for allergen in customization.allergens %}
+                                                <span style="background-color: #f3f4f6; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #4b5563; border: 1px solid #e5e7eb; margin-left: 4px;">
+                                                    {{ allergen.name }} Free
+                                                </span>
+                                            {% endfor %}
+                                        {% endif %}
+                                    </div>
+                                    {% if customization.selection_type == 'PICK_AND_MIX' and customization.flavor_selections %}
+                                        <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                                            {% for selection in customization.flavor_selections %}
+                                                <div style="margin-bottom: 4px;">
+                                                    {{ selection.quantity }}x {{ selection.flavor.name }}
+                                                </div>
+                                            {% endfor %}
+                                        </div>
                                     {% endif %}
-                                </span>
-
-                                <!-- Allergen Badges -->
-                                {% for allergen in item.box_customization.allergens.all %}
-                                <span style="
-                                    background-color: #f3f4f6;
-                                    padding: 4px 8px;
-                                    border-radius: 4px;
-                                    font-size: 12px;
-                                    color: #4b5563;
-                                    border: 1px solid #e5e7eb;
-                                    margin-left: 4px;
-                                ">
-                                    {{ allergen.name }} Free
-                                </span>
-                                {% endfor %}
-                            </div>
-
-                            <!-- Flavor Selections -->
-                            {% if item.box_customization.selection_type == 'PICK_AND_MIX' and item.box_customization.flavor_selections.exists %}
-                            <div style="
-                                margin-top: 8px;
-                                font-size: 12px;
-                                color: #6b7280;
-                            ">
-                                {% for selection in item.box_customization.flavor_selections.all %}
-                                <div style="margin-bottom: 4px;">
-                                    {{ selection.quantity }}x {{ selection.flavor.name }}
-                                </div>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-                            {% endif %}
+                                    {% if customization.chocolate_bark or customization.hot_chocolate or customization.gift_card %}
+                                        <div style="margin-top: 8px; font-size: 12px; color: #4f46e5;">
+                                            {% if customization.chocolate_bark %}
+                                                <div>+ Chocolate Bark: {{ customization.chocolate_bark.name }}</div>
+                                            {% endif %}
+                                            {% if customization.hot_chocolate %}
+                                                <div>+ Hot Chocolate: {{ customization.hot_chocolate.name }}</div>
+                                            {% endif %}
+                                            {% if customization.gift_card %}
+                                                <div>+ Gift Card: {{ customization.gift_card.name }}</div>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                {% endif %}
+                            {% endwith %}
                         </td>
                         <td style="
                             text-align: right;
@@ -247,7 +236,6 @@
                         </td>
                     </tr>
                     {% endfor %}
-
                     <!-- Order Summary Rows -->
                     <tr>
                         <td colspan="2" style="padding-top: 20px;">
@@ -266,7 +254,6 @@
                                     <tr>
                                         <td style="padding: 4px 0;">Shipping</td>
                                         <td style="text-align: right;">£{{ order.checkout_session.shipping_cost_pounds }}</td>
-                                        
                                     </tr>
                                     <tr style="font-weight: bold;">
                                         <td style="padding: 4px 0; border-top: 1px solid #eee;">Total</td>
@@ -278,7 +265,6 @@
                     </tr>
                 </table>
             </div>
-
             <h2>Shipping Information</h2>
             <p><strong>Shipping Address:</strong><br>
             {{ order.shipping_address.full_name }}<br>
@@ -299,15 +285,12 @@
             {% if order.billing_address.county %}, {{ order.billing_address.county }}{% endif %}
             <br>{{ order.billing_address.postcode }}
             <br>{{ order.billing_address.country }}</p>
-
             <h2>Contact Information</h2>
             <p><strong>Email:</strong> {{ order.email }}</p>
             <p><strong>Phone:</strong> {{ order.checkout_session.phone }}</p>
-
             <p>If you have any questions or need further assistance, feel free to reply to this email or contact our support team.</p>
             <p>Best regards,<br>The CassPea Team</p>
         </div>
-
         <!-- Footer Section -->
         <div class="footer">
             <p>&copy; {{ current_year }} CassPea. All rights reserved.</p>
