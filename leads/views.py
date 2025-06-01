@@ -8,6 +8,11 @@ from .serializers import LeadSerializer
 from rest_framework import generics, status
 from rest_framework.response import Response
 from django.core.mail import send_mail
+from rest_framework.permissions import IsAdminUser
+from django.http import HttpResponse
+import csv
+from rest_framework.views import APIView  # type: ignore
+
 
 class SubscribeNewsletterView(generics.CreateAPIView):
     """
@@ -73,3 +78,32 @@ class SubscribeNewsletterView(generics.CreateAPIView):
             status=status.HTTP_201_CREATED if status_email == 'sent' else status.HTTP_500_INTERNAL_SERVER_ERROR,
             headers=headers
         )
+
+
+class ListLeadsView(generics.ListAPIView):
+    """
+    Endpoint to list all leads.
+    """
+    serializer_class = LeadSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        return Lead.objects.all()
+
+# CSV export view
+
+
+class CSVLeadsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, format=None):
+        queryset = Lead.objects.all()
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="leads.csv"'
+        writer = csv.writer(response)
+        # Dynamically retrieve all field names from the Lead model
+        headers = [field.name for field in Lead._meta.fields]
+        writer.writerow(headers)
+        for lead in queryset:
+            writer.writerow([getattr(lead, field) for field in headers])
+        return response
