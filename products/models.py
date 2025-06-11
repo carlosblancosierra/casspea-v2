@@ -19,6 +19,7 @@ class ProductCategory(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
     description = models.TextField()
+    order = models.IntegerField(default=0)
 
     active = models.BooleanField(default=True)
 
@@ -53,6 +54,9 @@ class ProductCategory(models.Model):
     )
 
     objects = ProductCategoryManager()
+
+    class Meta:
+        ordering = ['order', '-created']
 
     def __str__(self):
         return self.name

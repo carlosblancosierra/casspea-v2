@@ -7,6 +7,7 @@ from decimal import Decimal, ROUND_UP
 
 from .managers import CartManager
 
+
 class Cart(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     session_id = models.CharField(max_length=255, null=True, blank=True)
@@ -122,10 +123,9 @@ class CartItemBoxCustomization(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
-
     def __str__(self):
         return f"{self.cart_item.product.name} Box Customization"
-    
+
 
 class CartItemPackCustomization(models.Model):
     SELECTION_TYPE_CHOICES = [
@@ -141,13 +141,14 @@ class CartItemPackCustomization(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     hot_chocolate = models.ForeignKey(Product, on_delete=models.CASCADE,
-        null=True, blank=True,
-        related_name='hot_chocolate_pack_customizations')
+                                      null=True, blank=True,
+                                      related_name='hot_chocolate_pack_customizations')
     gift_card = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True,
-        related_name='gift_card_pack_customizations')
+                                  related_name='gift_card_pack_customizations')
     chocolate_bark = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True,
-        related_name='chocolate_bark_pack_customizations')
-    
+                                       related_name='chocolate_bark_pack_customizations')
+
+
 class CartItemBoxFlavorSelection(models.Model):
     box_customization = models.ForeignKey(
         CartItemBoxCustomization,
@@ -157,11 +158,10 @@ class CartItemBoxFlavorSelection(models.Model):
         blank=True
     )
     pack_customization = models.ForeignKey(
-        CartItemPackCustomization,
-        related_name='flavor_selections',
+        CartItemPackCustomization,    # ← corregido
         on_delete=models.CASCADE,
-        null=True,
-        blank=True
+        related_name='flavor_selections_pack',
+        null=True, blank=True
     )
     flavor = models.ForeignKey(Flavour, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
@@ -171,5 +171,3 @@ class CartItemBoxFlavorSelection(models.Model):
 
     def __str__(self):
         return f"{self.flavor.name} x {self.quantity} in {self.box_customization}"
-    
-

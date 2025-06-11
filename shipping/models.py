@@ -50,6 +50,8 @@ class ShippingOption(models.Model):
 
     active = models.BooleanField(default=True)
     description = models.TextField(blank=True)
+    disabled = models.BooleanField(default=False)
+    disabled_reason = models.TextField(blank=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 

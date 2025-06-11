@@ -1,19 +1,31 @@
 from django.contrib import admin
 from .models import Cart, CartItem, CartItemBoxCustomization, CartItemBoxFlavorSelection, CartItemPackCustomization
 
-class CartItemBoxFlavorSelectionInline(admin.TabularInline):
+
+class BoxFlavorSelectionInline(admin.TabularInline):
     model = CartItemBoxFlavorSelection
+    fk_name = 'box_customization'
     extra = 0
     readonly_fields = ['created', 'updated']
     classes = ['collapse']
+
+
+class PackFlavorSelectionInline(admin.TabularInline):
+    model = CartItemBoxFlavorSelection
+    fk_name = 'pack_customization'
+    extra = 0
+    readonly_fields = ['created', 'updated']
+    classes = ['collapse']
+
 
 class CartItemBoxCustomizationInline(admin.TabularInline):
     model = CartItemBoxCustomization
     extra = 0
     readonly_fields = ['created', 'updated']
-    inlines = [CartItemBoxFlavorSelectionInline]
+    inlines = [BoxFlavorSelectionInline]
     show_change_link = True
     classes = ['collapse']
+
 
 class CartItemInline(admin.StackedInline):
     model = CartItem
@@ -26,6 +38,7 @@ class CartItemInline(admin.StackedInline):
     def get_formset(self, request, obj=None, **kwargs):
         formset = super().get_formset(request, obj, **kwargs)
         return formset
+
 
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
@@ -59,12 +72,13 @@ class CartAdmin(admin.ModelAdmin):
         }),
     )
 
+
 class CartItemBoxCustomizationAdmin(admin.ModelAdmin):
     list_display = ['id', 'cart_item', 'selection_type', 'created', 'updated']
     list_filter = ['selection_type', 'created', 'updated']
     search_fields = ['cart_item__cart__session_id']
     readonly_fields = ['created', 'updated']
-    inlines = [CartItemBoxFlavorSelectionInline]
+    inlines = [BoxFlavorSelectionInline]
 
 
 class CartItemPackCustomizationAdmin(admin.ModelAdmin):
@@ -72,7 +86,7 @@ class CartItemPackCustomizationAdmin(admin.ModelAdmin):
     list_filter = ['selection_type', 'created', 'updated']
     search_fields = ['cart_item__cart__session_id']
     readonly_fields = ['created', 'updated']
-    inlines = [CartItemBoxFlavorSelectionInline]
+    inlines = [PackFlavorSelectionInline]
     autocomplete_fields = ['cart_item']
 
 
@@ -92,6 +106,7 @@ class CartItemAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
 
 admin.site.register(CartItemBoxCustomization, CartItemBoxCustomizationAdmin)
 admin.site.register(CartItem, CartItemAdmin)
