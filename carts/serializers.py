@@ -16,12 +16,14 @@ from discounts.serializers import DiscountSerializer
 from django.utils import timezone
 from discounts.models import Discount
 
+
 class CartItemBoxFlavorSelectionSerializer(serializers.ModelSerializer):
     flavor = FlavourSerializer()
 
     class Meta:
         model = CartItemBoxFlavorSelection
         fields = ['id', 'flavor', 'quantity']
+
 
 class CartItemBoxCustomizationSerializer(serializers.ModelSerializer):
     allergens = AllergenSerializer(many=True)
@@ -31,10 +33,11 @@ class CartItemBoxCustomizationSerializer(serializers.ModelSerializer):
         model = CartItemBoxCustomization
         fields = ['id', 'selection_type', 'allergens', 'flavor_selections']
 
+
 class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
     allergens = AllergenSerializer(many=True)
-    flavor_selections = CartItemBoxFlavorSelectionSerializer(many=True)
-    
+    flavor_selections = CartItemBoxFlavorSelectionSerializer(source="flavor_selections_pack", many=True)
+
     class Meta:
         model = CartItemPackCustomization
         fields = [
@@ -46,6 +49,7 @@ class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
             'gift_card',
             'chocolate_bark',
         ]
+
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer()
@@ -67,6 +71,7 @@ class CartItemSerializer(serializers.ModelSerializer):
             'discounted_price',
             'savings'
         ]
+
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
@@ -121,6 +126,7 @@ class CartItemBoxFlavorSelectionCreateSerializer(serializers.ModelSerializer):
         model = CartItemBoxFlavorSelection
         fields = ['flavor', 'quantity']
 
+
 class CartItemBoxCustomizationCreateSerializer(serializers.ModelSerializer):
     flavor_selections = CartItemBoxFlavorSelectionCreateSerializer(many=True, required=False)
     allergens = serializers.PrimaryKeyRelatedField(
@@ -133,8 +139,10 @@ class CartItemBoxCustomizationCreateSerializer(serializers.ModelSerializer):
         model = CartItemBoxCustomization
         fields = ['selection_type', 'allergens', 'flavor_selections']
 
+
 class CartItemPackCustomizationCreateSerializer(serializers.ModelSerializer):
-    flavor_selections = CartItemBoxFlavorSelectionCreateSerializer(many=True, required=False)
+    flavor_selections = CartItemBoxFlavorSelectionCreateSerializer(
+        source="flavor_selections_pack", many=True, required=False)
     allergens = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Allergen.objects.all(),
@@ -144,6 +152,7 @@ class CartItemPackCustomizationCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CartItemPackCustomization
         fields = ['selection_type', 'allergens', 'flavor_selections', 'hot_chocolate', 'gift_card', 'chocolate_bark']
+
 
 class CartItemCreateSerializer(serializers.ModelSerializer):
     box_customization = CartItemBoxCustomizationCreateSerializer(required=False)
@@ -207,7 +216,8 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
         if pack_customization_data:
             flavor_selections_data = pack_customization_data.pop('flavor_selections', [])
             allergens_data = pack_customization_data.pop('allergens', [])
-            pack_customization = CartItemPackCustomization.objects.create(cart_item=cart_item, **pack_customization_data)
+            pack_customization = CartItemPackCustomization.objects.create(
+                cart_item=cart_item, **pack_customization_data)
             if allergens_data:
                 pack_customization.allergens.set(allergens_data)
             for flavor_data in flavor_selections_data:
@@ -243,7 +253,8 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
             try:
                 pack_customization = instance.pack_customization
             except CartItemPackCustomization.DoesNotExist:
-                pack_customization = CartItemPackCustomization.objects.create(cart_item=instance, **pack_customization_data)
+                pack_customization = CartItemPackCustomization.objects.create(
+                    cart_item=instance, **pack_customization_data)
             else:
                 flavor_selections_data = pack_customization_data.pop('flavor_selections', None)
                 for attr, value in pack_customization_data.items():
@@ -259,11 +270,13 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
 
         return instance
 
+
 class CartUpdateSerializer(serializers.ModelSerializer):
     gift_message = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
     shipping_date = serializers.DateField(required=False, allow_null=True)
     discount_code = serializers.CharField(required=False, allow_null=True, allow_blank=True, write_only=True)
     remove_discount = serializers.BooleanField(required=False, write_only=True)
+
     class Meta:
         model = Cart
         fields = [
@@ -298,6 +311,7 @@ class CartUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"discount_code": f"An unexpected error occurred: {str(e)}"})
 
         return super().update(instance, validated_data)
+
 
 class CartItemQuantityUpdateSerializer(serializers.ModelSerializer):
     quantity = serializers.IntegerField(min_value=1)
