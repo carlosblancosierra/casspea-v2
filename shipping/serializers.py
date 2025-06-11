@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import ShippingCompany, ShippingOption
 
+
 class ShippingCompanyWithOptionsSerializer(serializers.ModelSerializer):
     shipping_options = serializers.SerializerMethodField()
 
@@ -12,11 +13,12 @@ class ShippingCompanyWithOptionsSerializer(serializers.ModelSerializer):
         options = obj.options.filter(active=True)
         return ShippingOptionSerializer(options, many=True).data
 
+
 class ShippingOptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShippingOption
         fields = [
             'id', 'name', 'delivery_speed',
             'price', 'estimated_days_min', 'estimated_days_max',
-            'description'
+            'description', 'disabled', 'disabled_reason'
         ]
