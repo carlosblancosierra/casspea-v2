@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
+
 class EmailType(models.Model):
     """
     Represents different types of emails.
@@ -10,12 +11,15 @@ class EmailType(models.Model):
     CONTACT = 'contact'
     ORDER_PAID = 'order_paid'
     NON_PAYED_ORDER = 'non_payed_order'
+    ORDER_SHIPPING = 'order_shipping'
 
     CHOICES = [
         (NEWSLETTER, 'Newsletter'),
         (CONTACT, 'Contact'),
         (ORDER_PAID, 'Order Paid'),
         (NON_PAYED_ORDER, 'Non Payed Order'),
+        (ORDER_SHIPPING,
+         'Order Shipping'),
     ]
 
     name = models.CharField(

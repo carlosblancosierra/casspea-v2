@@ -10,7 +10,7 @@ from django.conf import settings
 class PendingCheckoutSessionsMailProcessor:
     def get_pending_checkout_sessions(self):
         time_delta = timezone.now() - timedelta(days=7)
-        
+
         email_type, _ = EmailType.objects.get_or_create(
             name='non_payed_order',
             defaults={'template_name': 'mails/order_not_paid.html'}
@@ -87,3 +87,46 @@ class PendingCheckoutSessionsMailProcessor:
                 f"Email: {session.email}, Created: {created}"
             )
         return sessions.count()
+
+
+class OrderShippingMailProcessor:
+    def build_email(self, order, test=False):
+        subject = "Your Order is about to ship!"
+        recipient = order.email if not test else "carlosblancosierra@gmail.com"
+        context = {
+            'order': order,
+            'tracking_number': order.tracking_number,
+            'current_year': timezone.now().year,
+        }
+        message = render_to_string("mails/order_shipping.html", context)
+        email = EmailMessage(
+            subject=subject,
+            body=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[recipient],
+        )
+        email.content_subtype = "html"
+        return email
+
+    def log_email_sent(self, order, is_test=False):
+        email_type = EmailType.objects.get(name=EmailType.ORDER_SHIPPING)
+        EmailSent.objects.create(
+            email_type=email_type,
+            content_object=order,
+            is_test=is_test,
+        )
+
+    def send_shipping_email(self, order, test=False):
+        if not order.tracking_number:
+            raise ValueError("Order does not have a tracking number.")
+        email = self.build_email(order, test=test)
+        if test:
+            mail_admins(
+                email.subject,
+                email.body,
+                html_message=email.body,
+            )
+        else:
+            email.send()
+        self.log_email_sent(order, is_test=test)
+        return True

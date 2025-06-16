@@ -1,0 +1,14 @@
+{% extends "mails/base.html" %}
+
+{% block title %}Your Order is About to Ship!{% endblock %}
+
+{% block hero %}
+<h1>Your Order is About to Ship!</h1>
+<p>Get ready for your delivery. Your tracking code is provided below.</p>
+{% endblock %}
+
+{% block content %}
+<h2>Shipping Notification</h2>
+<p><strong>Tracking Code:</strong> {{ tracking_number }}</p>
+<p>Your order is on its way. Use the tracking code above to track your shipment.</p>
+{% endblock %} 
