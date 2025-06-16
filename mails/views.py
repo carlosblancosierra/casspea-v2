@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.contenttypes.models import ContentType
+from rest_framework.permissions import IsAuthenticated
 
 from orders.models import Order
 from mails.models import EmailSent, EmailType
@@ -9,6 +10,8 @@ from mails.services import OrderShippingMailProcessor
 
 
 class OrderShippingEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         order_id = request.data.get('order_id')
         if not order_id:
