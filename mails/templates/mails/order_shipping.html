@@ -9,6 +9,17 @@
 
 {% block content %}
 <h2>Shipping Notification</h2>
-<p><strong>Tracking Code:</strong> {{ tracking_number }}</p>
-<p>Your order is on its way. Use the tracking code above to track your shipment.</p>
+<p>
+  <strong>Tracking Code:</strong>
+  <a href="https://www.royalmail.com/track-your-item?trackNumber={{ tracking_number }}" target="_blank" rel="noopener">
+    {{ tracking_number }}
+  </a>
+</p>
+<p>
+  Your tracking code has been created and your order will be shipping soon.  
+  You can check the status and estimated delivery date on the 
+  <a href="https://www.royalmail.com/track-your-item?trackNumber={{ tracking_number }}" target="_blank" rel="noopener">
+    Royal Mail tracking page
+  </a>.
+</p>
 {% endblock %} 
