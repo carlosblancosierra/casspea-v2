@@ -7,6 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 from datetime import datetime
 
+
 class OrderListView(generics.ListAPIView):
     """
     List all orders with filtering and search capabilities
@@ -16,7 +17,7 @@ class OrderListView(generics.ListAPIView):
     permission_classes = [permissions.IsAdminUser]
     authentication_classes = [CustomJWTAuthentication]
     ordering = ['-created']
-    
+
     def get_queryset(self):
         # Get the days parameter from query params, default to 15 if not provided or invalid.
 
@@ -28,11 +29,11 @@ class OrderListView(generics.ListAPIView):
             start_date = timezone.make_aware(start_date)
             if self.request.query_params.get('end_date'):
                 end_date = datetime.strptime(self.request.query_params.get('end_date'), '%Y-%m-%d')
-                end_date = timezone.make_aware(end_date)
+                end_date = timezone.make_aware(end_date) + timedelta(days=1)
 
         print("start_date", start_date)
         print("end_date", end_date)
-    
+
         return Order.objects.filter(created__range=(start_date, end_date)).select_related(
             'checkout_session',
             'checkout_session__cart',
@@ -46,8 +47,13 @@ class OrderListView(generics.ListAPIView):
             'checkout_session__cart__items__box_customization',
             'checkout_session__cart__items__box_customization__flavor_selections',
             'checkout_session__cart__items__box_customization__flavor_selections__flavor',
-            'checkout_session__cart__items__box_customization__allergens'
+            'checkout_session__cart__items__box_customization__allergens',
+            'checkout_session__cart__items__pack_customization',
+            'checkout_session__cart__items__pack_customization__flavor_selections',
+            'checkout_session__cart__items__pack_customization__flavor_selections__flavor',
+            'checkout_session__cart__items__pack_customization__allergens'
         ).order_by('-created')
+
 
 class OrderDetailView(generics.RetrieveAPIView):
     """
@@ -72,7 +78,10 @@ class OrderDetailView(generics.RetrieveAPIView):
             'checkout_session__cart__items',
             'checkout_session__cart__items__product',
             'checkout_session__cart__items__box_customization',
+            'checkout_session__cart__items__pack_customization',
             'checkout_session__cart__items__box_customization__flavor_selections',
+            'checkout_session__cart__items__pack_customization__flavor_selections',
             'checkout_session__cart__items__box_customization__allergens',
+            'checkout_session__cart__items__pack_customization__allergens',
             'checkout_session__cart__discount'
         )
