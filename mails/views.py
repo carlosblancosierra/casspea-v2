@@ -1,59 +1,81 @@
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.contrib.contenttypes.models import ContentType
 from rest_framework.permissions import IsAuthenticated
 
 from orders.models import Order
 from mails.models import EmailSent, EmailType
 from mails.services import OrderShippingMailProcessor
+from users.authentication import CustomJWTAuthentication
+
+# cache these to avoid querying per-request
+ORDER_CT = ContentType.objects.get_for_model(Order)
+SHIPPING_EMAIL_TYPE = EmailType.objects.get(name=EmailType.ORDER_SHIPPING)
 
 
 class OrderShippingEmailView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [CustomJWTAuthentication]
 
     def post(self, request):
-        order_id = request.data.get('order_id')
-        if not order_id:
-            return Response({"error": "Order ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
+        # 1. Validate & parse order_id
         try:
-            order = Order.objects.get(order_id=order_id)
-        except Order.DoesNotExist:
-            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+            order_id = int(request.data.get('order_id'))
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid or missing order_id"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # 2. Fetch order or 404
+        order = get_object_or_404(Order, pk=order_id)
+
+        # 3. Permission check
+        if order.user != request.user:
+            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
+        # 4. Business validations
         if not order.tracking_number:
-            return Response({"error": "Order does not have a tracking number"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Order has no tracking number"}, status=status.HTTP_400_BAD_REQUEST)
 
-        processor = OrderShippingMailProcessor()
+        already_sent = EmailSent.objects.filter(
+            content_type=ORDER_CT,
+            object_id=order.pk,
+            email_type=SHIPPING_EMAIL_TYPE,
+            status=EmailSent.SENT,
+            is_test=False
+        ).exists()
+        if already_sent:
+            return Response({"error": "Shipping email already sent"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 5. Log + send within a transaction
         try:
-            processor.send_shipping_email(order, test=False)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            with transaction.atomic():
+                log = EmailSent.objects.create(
+                    content_type=ORDER_CT,
+                    object_id=order.pk,
+                    email_type=SHIPPING_EMAIL_TYPE,
+                    status=EmailSent.PENDING,
+                    is_test=False
+                )
+                # send email (consider offloading to Celery/RQ for non-blocking)
+                processor = OrderShippingMailProcessor()
+                processor.send_shipping_email(order, test=False)
+
+                log.status = EmailSent.SENT
+                log.sent = timezone.now()
+                log.save(update_fields=['status', 'sent'])
+        except Exception as exc:
+            # update failure
+            if 'log' in locals():
+                log.status = EmailSent.FAILED
+                log.error_message = str(exc)
+                log.save(update_fields=['status', 'error_message'])
+            return Response(
+                {"error": "Failed to send shipping email"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         return Response({"message": "Shipping email sent successfully"}, status=status.HTTP_200_OK)
-
-
-class OrderEmailLogView(APIView):
-    def get(self, request, order_id):
-        try:
-            order = Order.objects.get(order_id=order_id)
-        except Order.DoesNotExist:
-            return Response(
-                {"error": "Order not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        ct = ContentType.objects.get_for_model(Order)
-        logs = EmailSent.objects.filter(
-            content_type=ct,
-            object_id=order.pk,
-            email_type__name=EmailType.ORDER_SHIPPING
-        )
-        logs_data = [
-            {"id": log.pk, "status": log.status, "sent": log.sent, "created": log.created}
-            for log in logs
-        ]
-        return Response(
-            logs_data,
-            status=status.HTTP_200_OK
-        )
