@@ -13,10 +13,6 @@ from mails.models import EmailSent, EmailType
 from mails.services import OrderShippingMailProcessor
 from users.authentication import CustomJWTAuthentication
 
-# cache these to avoid querying per-request
-ORDER_CT = ContentType.objects.get_for_model(Order)
-SHIPPING_EMAIL_TYPE = EmailType.objects.get(name=EmailType.ORDER_SHIPPING)
-
 
 class OrderShippingEmailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -39,6 +35,10 @@ class OrderShippingEmailView(APIView):
         # 4. Business validations
         if not order.tracking_number:
             return Response({"error": "Order has no tracking number"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Move these lookups here
+        ORDER_CT = ContentType.objects.get_for_model(Order)
+        SHIPPING_EMAIL_TYPE = EmailType.objects.get(name=EmailType.ORDER_SHIPPING)
 
         already_sent = EmailSent.objects.filter(
             content_type=ORDER_CT,
