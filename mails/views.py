@@ -23,22 +23,22 @@ class OrderShippingEmailView(APIView):
         try:
             order_id = request.data.get('order_id')
         except (TypeError, ValueError):
-            return Response({"error": "Invalid or missing order_id"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid or missing order_id"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         # 2. Fetch order or 404
         order = get_object_or_404(Order, order_id=order_id)
 
-        # 3. Permission check
-        if order.user != request.user:
-            return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
-
         # 4. Business validations
         if not order.tracking_number:
-            return Response({"error": "Order has no tracking number"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Order has no tracking number"},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         # Move these lookups here
         ORDER_CT = ContentType.objects.get_for_model(Order)
-        SHIPPING_EMAIL_TYPE = EmailType.objects.get(name=EmailType.ORDER_SHIPPING)
+        SHIPPING_EMAIL_TYPE = EmailType.objects.get(
+            name=EmailType.ORDER_SHIPPING
+        )
 
         already_sent = EmailSent.objects.filter(
             content_type=ORDER_CT,
@@ -48,7 +48,10 @@ class OrderShippingEmailView(APIView):
             is_test=False
         ).exists()
         if already_sent:
-            return Response({"error": "Shipping email already sent"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Shipping email already sent"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # 5. Log + send within a transaction
         try:
@@ -60,7 +63,7 @@ class OrderShippingEmailView(APIView):
                     status=EmailSent.PENDING,
                     is_test=False
                 )
-                # send email (consider offloading to Celery/RQ for non-blocking)
+                # send email
                 processor = OrderShippingMailProcessor()
                 processor.send_shipping_email(order, test=False)
 
@@ -78,4 +81,7 @@ class OrderShippingEmailView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-        return Response({"message": "Shipping email sent successfully"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Shipping email sent successfully"},
+            status=status.HTTP_200_OK
+        )
