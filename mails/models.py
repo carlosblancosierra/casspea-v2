@@ -52,14 +52,6 @@ class EmailSent(models.Model):
         indexes = [
             models.Index(fields=['content_type', 'object_id', 'email_type']),
         ]
-        constraints = [
-            # only one non-test SENT per object+type
-            models.UniqueConstraint(
-                fields=['content_type', 'object_id', 'email_type'],
-                condition=Q(is_test=False),
-                name='unique_nontest_email_per_object'
-            )
-        ]
 
     def __str__(self):
         return f"{self.email_type.name} for {self.content_object} – {self.status}"
