@@ -25,12 +25,12 @@ class OrderShippingEmailView(APIView):
     def post(self, request):
         # 1. Validate & parse order_id
         try:
-            order_id = int(request.data.get('order_id'))
+            order_id = request.data.get('order_id')
         except (TypeError, ValueError):
             return Response({"error": "Invalid or missing order_id"}, status=status.HTTP_400_BAD_REQUEST)
 
         # 2. Fetch order or 404
-        order = get_object_or_404(Order, pk=order_id)
+        order = get_object_or_404(Order, order_id=order_id)
 
         # 3. Permission check
         if order.user != request.user:
