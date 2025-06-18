@@ -45,12 +45,8 @@ class OrderListView(generics.ListAPIView):
             'checkout_session__cart__items',
             'checkout_session__cart__items__product',
             'checkout_session__cart__items__box_customization',
-            'checkout_session__cart__items__box_customization__flavor_selections',
-            'checkout_session__cart__items__box_customization__flavor_selections__flavor',
             'checkout_session__cart__items__box_customization__allergens',
             'checkout_session__cart__items__pack_customization',
-            'checkout_session__cart__items__pack_customization__flavor_selections',
-            'checkout_session__cart__items__pack_customization__flavor_selections__flavor',
             'checkout_session__cart__items__pack_customization__allergens'
         ).order_by('-created')
 
