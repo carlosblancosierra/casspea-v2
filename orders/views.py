@@ -10,6 +10,7 @@ from django.db.models.functions import TruncMonth
 
 from rest_framework import generics, permissions
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.authentication import SessionAuthentication
 
 from users.authentication import CustomJWTAuthentication
 from .models import Order
@@ -98,23 +99,23 @@ class OrderDetailView(generics.RetrieveAPIView):
 
 
 @api_view(['GET'])
-# @authentication_classes([CustomJWTAuthentication])
-# @permission_classes([permissions.IsAdminUser])
+@authentication_classes([CustomJWTAuthentication, SessionAuthentication])
+@permission_classes([permissions.IsAdminUser])
 def export_product_sales_csv(request):
     """
     CSV download: ventas pagadas por mes y producto.
     Opcionales: ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
     """
-    now = timezone.now()
-    start = now - timedelta(days=30)
-    end = now
-
     sd = request.query_params.get('start_date')
     ed = request.query_params.get('end_date')
     if sd:
         start = timezone.make_aware(datetime.strptime(sd, '%Y-%m-%d'))
+    else:
+        start = timezone.make_aware(datetime(2025, 1, 1))
     if ed:
         end = timezone.make_aware(datetime.strptime(ed, '%Y-%m-%d')) + timedelta(days=1)
+    else:
+        end = timezone.make_aware(datetime(2026, 1, 1))
 
     qs = (
         Order.objects
