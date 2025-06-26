@@ -167,12 +167,7 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     def get_past_orders(self, obj):
         email = obj.checkout_session.email or ''
-        ids = self.context['view'].past_ids_map.get(email, [])
+        order_ids = self.context['view'].past_ids_map.get(email, [])
         # excluimos la orden actual por si acaso
-        past_orders = (
-            Order.objects
-            .filter(pk__in=ids)
-            .exclude(pk=obj.pk)
-            .values_list('order_id', flat=True)
-        )
-        return list(past_orders)
+        past_orders = [oid for oid in order_ids if oid != obj.order_id]
+        return past_orders
