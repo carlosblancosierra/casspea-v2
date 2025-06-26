@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta
 import csv
+from django.contrib.postgres.aggregates import ArrayAgg
+from django.db.models import Q
 
 from django.http import HttpResponse
 from django.utils import timezone
@@ -28,38 +30,48 @@ class OrderListView(generics.ListAPIView):
     ordering = ['-created']
 
     def get_queryset(self):
+        qs = Order.objects.select_related(
+            'checkout_session',
+            'checkout_session__cart',
+            'checkout_session__shipping_address',
+            'checkout_session__billing_address',
+            'checkout_session__shipping_option'
+        ).prefetch_related(
+            'status_history',
+            'checkout_session__cart__items',
+            'checkout_session__cart__items__product',
+            'checkout_session__cart__items__box_customization',
+            'checkout_session__cart__items__pack_customization',
+        )
+
+        # 1) Rango de fechas como antes…
         now = timezone.now()
         start = now - timedelta(days=10)
         end = now
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+        if start_date:
+            start = timezone.make_aware(datetime.strptime(start_date, '%Y-%m-%d'))
+            if end_date:
+                end = timezone.make_aware(datetime.strptime(end_date, '%Y-%m-%d')) + timedelta(days=1)
+        qs = qs.filter(created__range=(start, end))
 
-        sd = self.request.query_params.get('start_date')
-        ed = self.request.query_params.get('end_date')
-        if sd:
-            start = timezone.make_aware(datetime.strptime(sd, '%Y-%m-%d'))
-            if ed:
-                end = timezone.make_aware(datetime.strptime(ed, '%Y-%m-%d')) + timedelta(days=1)
-
-        return (
+        # 2) Pre-cargar el mapa email → [order_id de pagados]
+        emails = qs.values_list('checkout_session__email', flat=True).distinct()
+        paid = (
             Order.objects
-            .filter(created__range=(start, end))
-            .select_related(
-                'checkout_session',
-                'checkout_session__cart',
-                'checkout_session__shipping_address',
-                'checkout_session__billing_address',
-                'checkout_session__shipping_option'
+            .filter(
+                checkout_session__email__in=emails,
+                checkout_session__payment_status='paid'
             )
-            .prefetch_related(
-                'status_history',
-                'checkout_session__cart__items',
-                'checkout_session__cart__items__product',
-                'checkout_session__cart__items__box_customization',
-                'checkout_session__cart__items__box_customization__allergens',
-                'checkout_session__cart__items__pack_customization',
-                'checkout_session__cart__items__pack_customization__allergens'
-            )
-            .order_by('-created')
+            .values('checkout_session__email')
+            .annotate(past_orders=ArrayAgg('order_id'))
         )
+        self.past_ids_map = {
+            item['checkout_session__email'] or '': item['past_orders']
+            for item in paid
+        }
+        return qs.order_by('-created')
 
 
 class OrderDetailView(generics.RetrieveAPIView):

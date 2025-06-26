@@ -3,11 +3,14 @@ from .models import Order
 from checkout.models import CheckoutSession
 from addresses.serializers import AddressSerializer
 from carts.models import CartItem
-from carts.models import Cart, CartItemBoxFlavorSelection, CartItemPackCustomization
+from carts.models import (
+    Cart,
+    CartItemBoxFlavorSelection,
+    CartItemPackCustomization
+)
 from products.models import Product
 from checkout.models import ShippingOption
 from carts.serializers import CartItemBoxCustomizationSerializer
-from carts.models import CartItemPackCustomization
 
 
 class OrderProductSerializer(serializers.ModelSerializer):
@@ -62,12 +65,22 @@ class CartItemSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
-    discount = serializers.CharField(source='discount.code', read_only=True)
-    gift_message = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
+    discount = serializers.CharField(
+        source='discount.code', read_only=True
+    )
+    gift_message = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, allow_null=True
+    )
     shipping_date = serializers.DateField(required=False, allow_null=True)
-    base_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    discounted_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    total_savings = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    base_total = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
+    discounted_total = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
+    total_savings = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
 
     class Meta:
         model = Cart
@@ -83,7 +96,12 @@ class CartSerializer(serializers.ModelSerializer):
         ]
 
     def get_total(self, obj):
-        return str(sum(item.quantity * item.product.base_price for item in obj.items.all()))
+        return str(
+            sum(
+                item.quantity * item.product.base_price
+                for item in obj.items.all()
+            )
+        )
 
 
 class ShippingOptionSerializer(serializers.ModelSerializer):
@@ -141,7 +159,20 @@ class CheckoutSessionSerializer(serializers.ModelSerializer):
 
 class OrderListSerializer(serializers.ModelSerializer):
     checkout_session = CheckoutSessionSerializer()
+    past_orders = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = '__all__'
+
+    def get_past_orders(self, obj):
+        email = obj.checkout_session.email or ''
+        ids = self.context['view'].past_ids_map.get(email, [])
+        # excluimos la orden actual por si acaso
+        past_orders = (
+            Order.objects
+            .filter(pk__in=ids)
+            .exclude(pk=obj.pk)
+            .values_list('order_id', flat=True)
+        )
+        return list(past_orders)
