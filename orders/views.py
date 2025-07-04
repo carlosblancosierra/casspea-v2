@@ -3,8 +3,6 @@
 from datetime import datetime, timedelta
 import csv
 from django.contrib.postgres.aggregates import ArrayAgg
-from django.db.models import Q
-
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
@@ -17,6 +15,10 @@ from rest_framework.authentication import SessionAuthentication
 from users.authentication import CustomJWTAuthentication
 from .models import Order
 from .serializers import OrderListSerializer
+from flavours.models import Flavour
+from flavours.serializers import FlavourSerializer
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 
 class OrderListView(generics.ListAPIView):
@@ -51,9 +53,13 @@ class OrderListView(generics.ListAPIView):
         start_date = self.request.query_params.get('start_date')
         end_date = self.request.query_params.get('end_date')
         if start_date:
-            start = timezone.make_aware(datetime.strptime(start_date, '%Y-%m-%d'))
+            start = timezone.make_aware(
+                datetime.strptime(start_date, '%Y-%m-%d')
+            )
             if end_date:
-                end = timezone.make_aware(datetime.strptime(end_date, '%Y-%m-%d')) + timedelta(days=1)
+                end = timezone.make_aware(
+                    datetime.strptime(end_date, '%Y-%m-%d')
+                ) + timedelta(days=1)
         qs = qs.filter(created__range=(start, end))
 
         # 2) Pre-cargar el mapa email → [order_id de pagados]
@@ -174,3 +180,49 @@ def export_product_sales_csv(request):
         ])
 
     return resp
+
+
+class FlavoursSoldView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+    authentication_classes = [CustomJWTAuthentication, SessionAuthentication]
+
+    def get(self, request):
+        # Get all paid orders
+        paid_orders = Order.objects.filter(
+            checkout_session__payment_status='paid'
+        )
+        # Get all related carts
+        cart_ids = paid_orders.values_list(
+            'checkout_session__cart_id', flat=True
+        )
+        # Get all cart items for these carts
+        from carts.models import CartItem
+        cart_items = CartItem.objects.filter(cart_id__in=cart_ids)
+
+        # Aggregate flavour quantities
+        from collections import Counter
+        flavour_counter = Counter()
+
+        # For each cart item, sum up the flavours from both customizations
+        for item in cart_items:
+            # Box customization
+            if hasattr(item, 'box_customization') and item.box_customization:
+                for fs in item.box_customization.flavor_selections.all():
+                    flavour_counter[fs.flavor_id] += (
+                        fs.quantity * item.quantity
+                    )
+            # Pack customization
+            if hasattr(item, 'pack_customization') and item.pack_customization:
+                for fs in item.pack_customization.flavor_selections_pack.all():
+                    flavour_counter[fs.flavor_id] += (
+                        fs.quantity * item.quantity
+                    )
+
+        # Prepare response
+        flavours = Flavour.objects.filter(id__in=flavour_counter.keys())
+        data = []
+        for flavour in flavours:
+            serialized = FlavourSerializer(flavour).data
+            serialized['quantity_sold'] = flavour_counter[flavour.id]
+            data.append(serialized)
+        return Response(data)
