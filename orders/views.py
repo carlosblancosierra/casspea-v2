@@ -202,21 +202,35 @@ class FlavoursSoldView(APIView):
         # Aggregate flavour quantities
         from collections import Counter
         flavour_counter = Counter()
+        random_box_count = 0
 
         # For each cart item, sum up the flavours from both customizations
         for item in cart_items:
             # Box customization
             if hasattr(item, 'box_customization') and item.box_customization:
-                for fs in item.box_customization.flavor_selections.all():
-                    flavour_counter[fs.flavor_id] += (
-                        fs.quantity * item.quantity
-                    )
+                if (
+                    item.box_customization.selection_type == 'RANDOM'
+                    and item.box_customization.flavor_selections.count() == 0
+                ):
+                    # Count as random box
+                    random_box_count += item.product.units_per_box * item.quantity
+                else:
+                    # Pick and Mix or explicit selections
+                    for fs in item.box_customization.flavor_selections.all():
+                        flavour_counter[fs.flavor_id] += fs.quantity * item.quantity
             # Pack customization
             if hasattr(item, 'pack_customization') and item.pack_customization:
-                for fs in item.pack_customization.flavor_selections_pack.all():
-                    flavour_counter[fs.flavor_id] += (
-                        fs.quantity * item.quantity
-                    )
+                if (
+                    item.pack_customization.selection_type == 'RANDOM'
+                    and item.pack_customization.flavor_selections_pack.count() == 0
+                ):
+                    # Count as random pack
+                    random_box_count += item.product.units_per_box * item.quantity
+                else:
+                    for fs in item.pack_customization.flavor_selections_pack.all():
+                        flavour_counter[fs.flavor_id] += (
+                            fs.quantity * item.quantity
+                        )
 
         # Prepare response
         flavours = Flavour.objects.filter(id__in=flavour_counter.keys())
@@ -225,4 +239,11 @@ class FlavoursSoldView(APIView):
             serialized = FlavourSerializer(flavour).data
             serialized['quantity_sold'] = flavour_counter[flavour.id]
             data.append(serialized)
+
+        if random_box_count > 0:
+            data.append({
+                "name": "Random",
+                "quantity_sold": random_box_count,
+            })
+
         return Response(data)
