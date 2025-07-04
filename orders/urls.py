@@ -9,6 +9,6 @@ urlpatterns = [
     path('send-tracking-code-mail/', mails_views.OrderShippingEmailView.as_view(), name='send-tracking-code-mail'),
     path('csv/', views.export_product_sales_csv, name='export-product-sales-csv'),
     path('flavours-sold/', views.FlavoursSoldView.as_view(), name='flavours-sold'),
-    path('flavours-sold-csv/', views.FlavoursSoldCSVView.as_view(), name='flavours-sold-csv'),
+    path('flavours-sold/csv/', views.FlavoursSoldCSVView.as_view(), name='flavours-sold-csv'),
     path('<str:order_id>/', views.OrderDetailView.as_view(), name='order-detail'),
 ]
