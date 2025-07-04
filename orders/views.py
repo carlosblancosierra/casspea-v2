@@ -199,51 +199,63 @@ class FlavoursSoldView(APIView):
         from carts.models import CartItem
         cart_items = CartItem.objects.filter(cart_id__in=cart_ids)
 
-        # Aggregate flavour quantities
-        from collections import Counter
-        flavour_counter = Counter()
-        random_box_count = 0
+        # Build cart_id to month mapping
+        cart_id_to_month = {}
+        for order in paid_orders:
+            cart_id = order.checkout_session.cart_id
+            month = order.created.strftime('%Y-%m')
+            cart_id_to_month[cart_id] = month
 
-        # For each cart item, sum up the flavours from both customizations
+        from collections import defaultdict
+        monthly_flavour_counter = defaultdict(lambda: defaultdict(int))
+
         for item in cart_items:
+            month = cart_id_to_month.get(item.cart_id)
+            if not month:
+                continue
             # Box customization
             if hasattr(item, 'box_customization') and item.box_customization:
                 if (
                     item.box_customization.selection_type == 'RANDOM'
                     and item.box_customization.flavor_selections.count() == 0
                 ):
-                    # Count as random box
-                    random_box_count += item.product.units_per_box * item.quantity
+                    monthly_flavour_counter['random'][month] += (
+                        item.product.units_per_box * item.quantity
+                    )
                 else:
-                    # Pick and Mix or explicit selections
                     for fs in item.box_customization.flavor_selections.all():
-                        flavour_counter[fs.flavor_id] += fs.quantity * item.quantity
+                        monthly_flavour_counter[fs.flavor_id][month] += (
+                            fs.quantity * item.quantity
+                        )
             # Pack customization
             if hasattr(item, 'pack_customization') and item.pack_customization:
                 if (
                     item.pack_customization.selection_type == 'RANDOM'
                     and item.pack_customization.flavor_selections_pack.count() == 0
                 ):
-                    # Count as random pack
-                    random_box_count += item.product.units_per_box * item.quantity
+                    monthly_flavour_counter['random'][month] += (
+                        item.product.units_per_box * item.quantity
+                    )
                 else:
                     for fs in item.pack_customization.flavor_selections_pack.all():
-                        flavour_counter[fs.flavor_id] += (
+                        monthly_flavour_counter[fs.flavor_id][month] += (
                             fs.quantity * item.quantity
                         )
 
         # Prepare response
-        flavours = Flavour.objects.filter(id__in=flavour_counter.keys())
         data = []
-        for flavour in flavours:
-            serialized = FlavourSerializer(flavour).data
-            serialized['quantity_sold'] = flavour_counter[flavour.id]
-            data.append(serialized)
-
-        if random_box_count > 0:
+        # Flavours
+        flavour_ids = [fid for fid in monthly_flavour_counter.keys() if fid != 'random']
+        flavour_names = dict(Flavour.objects.filter(id__in=flavour_ids).values_list('id', 'name'))
+        for flavour_id in flavour_ids:
             data.append({
-                "name": "Random",
-                "quantity_sold": random_box_count,
+                'name': flavour_names.get(flavour_id, str(flavour_id)),
+                'monthly': dict(monthly_flavour_counter[flavour_id])
             })
-
+        # Random
+        if 'random' in monthly_flavour_counter:
+            data.append({
+                'name': 'Random',
+                'monthly': dict(monthly_flavour_counter['random'])
+            })
         return Response(data)
