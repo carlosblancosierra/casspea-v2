@@ -14,11 +14,13 @@ from rest_framework.authentication import SessionAuthentication
 
 from users.authentication import CustomJWTAuthentication
 from .models import Order
-from .serializers import OrderListSerializer
+from .serializers import OrderListSerializer, CustomerOrderSerializer, CustomerShippingDateUpdateSerializer
 from flavours.models import Flavour
 from flavours.serializers import FlavourSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from rest_framework import status
 
 
 class OrderListView(generics.ListAPIView):
@@ -277,3 +279,105 @@ class FlavoursSoldCSVView(APIView):
             for month, qty in monthly_flavour_counter['random'].items():
                 writer.writerow(['Random', month, qty])
         return response
+
+
+class CustomerOrderRetrieveView(APIView):
+    """
+    POST /api/orders/customer/lookup/
+    Body: {"order_id": ..., "email": ...}
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        order_id = request.data.get('order_id')
+        email = request.data.get('email')
+        if not order_id or not email:
+            return Response({'detail': 'order_id and email are required.'}, status=400)
+        order = get_object_or_404(Order, order_id=order_id)
+        if (order.checkout_session.email or '').strip().lower() != email.strip().lower():
+            return Response({'detail': 'Order not found.'}, status=404)
+        serializer = CustomerOrderSerializer(order)
+        return Response(serializer.data)
+
+
+class CustomerOrderShippingDateUpdateView(APIView):
+    """
+    POST /api/orders/customer/update-shipping-date/
+    Body: {"order_id": ..., "email": ..., "shipping_date": ...}
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        order_id = request.data.get('order_id')
+        email = request.data.get('email')
+        shipping_date = request.data.get('shipping_date')
+        if not order_id or not email or not shipping_date:
+            return Response({'detail': 'order_id, email, and shipping_date are required.'}, status=400)
+        order = get_object_or_404(Order, order_id=order_id)
+        if (order.checkout_session.email or '').strip().lower() != email.strip().lower():
+            return Response({'detail': 'Order not found.'}, status=404)
+        # Only allow update if not shipped
+        if order.status == 'shipped' or order.shipped:
+            return Response({'detail': 'Cannot update shipping date after order is shipped.'}, status=400)
+        serializer = CustomerShippingDateUpdateSerializer(data={'shipping_date': shipping_date})
+        if serializer.is_valid():
+            order.checkout_session.cart.shipping_date = serializer.validated_data['shipping_date']
+            order.checkout_session.cart.save()
+            return Response({'detail': 'Shipping date updated successfully.'})
+        return Response(serializer.errors, status=400)
+
+
+class MonthlyChocolateCountView(APIView):
+    """
+    GET /api/orders/chocolates-sold/
+    Returns: [{"month": "YYYY-MM", "chocolates_sold": N}, ...]
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        paid_orders = Order.objects.filter(checkout_session__payment_status='paid')
+        cart_id_to_month = {}
+        for order in paid_orders:
+            cart_id = order.checkout_session.cart_id
+            month = order.created.strftime('%Y-%m')
+            cart_id_to_month[cart_id] = month
+
+        from carts.models import CartItem
+        cart_items = CartItem.objects.filter(cart_id__in=cart_id_to_month.keys())
+        from collections import defaultdict
+        monthly_chocolate_counter = defaultdict(int)
+
+        for item in cart_items:
+            month = cart_id_to_month.get(item.cart_id)
+            if not month:
+                continue
+            # For each item, count total chocolates (units_per_box * quantity)
+            units = item.product.units_per_box * item.quantity
+            monthly_chocolate_counter[month] += units
+
+        # Format as list of dicts sorted by month
+        data = [
+            {"month": month, "chocolates_sold": count}
+            for month, count in sorted(monthly_chocolate_counter.items())
+        ]
+        return Response(data)
+
+
+class TotalUnitsSoldView(APIView):
+    """
+    GET /api/orders/total-units-sold/
+    Returns: {"total_units_sold": N}
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        paid_orders = Order.objects.filter(checkout_session__payment_status='paid')
+        cart_ids = [order.checkout_session.cart_id for order in paid_orders]
+        from carts.models import CartItem
+        cart_items = CartItem.objects.filter(cart_id__in=cart_ids)
+        total_units = sum(item.product.units_per_box * item.quantity for item in cart_items)
+        return Response({"total_units_sold": total_units})
