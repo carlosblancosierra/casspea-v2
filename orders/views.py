@@ -384,52 +384,43 @@ class TotalUnitsSoldView(APIView):
 
 
 class DailyUnitsSoldView(APIView):
-    """
-    GET /api/orders/daily-units-sold/
-    Returns: [{"date": "YYYY-MM-DD", "units_sold": N}, ...]
-    For each day, sums units_sold from all sources, but only checks orders and creates UnitsSold for 'ecommerce-v2'.
-    """
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        source = 'ecommerce-v2'
-        # Find all days with paid orders (ecommerce-v2)
-        paid_orders = Order.objects.filter(checkout_session__payment_status='paid')
-        from collections import defaultdict
-        date_to_cart_ids = defaultdict(list)
-        for order in paid_orders:
-            order_date = order.created.date()
-            cart_id = order.checkout_session.cart_id
-            date_to_cart_ids[order_date].append(cart_id)
-
         from carts.models import CartItem
-        today = date.today()
-        # For each day with paid orders, ensure UnitsSold for ecommerce-v2 exists
-        for day, cart_ids in sorted(date_to_cart_ids.items()):
-            if day == today:
-                continue  # Do not cache today
-            obj, created = UnitsSold.objects.get_or_create(source=source, date=day)
-            if created:
-                cart_items = CartItem.objects.filter(cart_id__in=cart_ids)
-                total_units = sum(item.product.units_per_box * item.quantity for item in cart_items)
-                obj.units_sold = total_units
-                obj.save()
 
-        # Now, for all days present in UnitsSold, sum all sources for each day
-        all_units = UnitsSold.objects.all()
-        day_to_total = defaultdict(int)
-        for obj in all_units:
-            day_to_total[obj.date] += obj.units_sold
-        # For today, always calculate on the fly from orders (ecommerce-v2 only)
-        if today in date_to_cart_ids:
-            cart_items = CartItem.objects.filter(cart_id__in=date_to_cart_ids[today])
-            total_units = sum(item.product.units_per_box * item.quantity for item in cart_items)
-            day_to_total[today] += total_units
-        # Format results
+        today = timezone.localdate()  # respeta zona horaria
+        # 1. Histórico: agrupa por fecha sumando todos los sources ya almacenados en UnitsSold
+        historical_qs = (
+            UnitsSold.objects
+            .values('date')
+            .annotate(units_sold=Sum('units_sold'))
+        )
+        day_to_total = {entry['date']: entry['units_sold'] for entry in historical_qs}
+
+        # 2. Día de hoy: calcular en vivo desde órdenes pagadas (todas las fuentes)
+        paid_today_cart_ids = (
+            Order.objects
+            .filter(checkout_session__payment_status='paid', created__date=today)
+            .values_list('checkout_session__cart_id', flat=True)
+        )
+
+        today_agg = (
+            CartItem.objects
+            .filter(cart_id__in=paid_today_cart_ids)
+            .aggregate(
+                units_sold=Sum(F('product__units_per_box') * F('quantity'))
+            )
+        )
+        today_units = today_agg['units_sold'] or 0
+        day_to_total[today] = today_units  # sobrescribe si existiera
+
+        # 3. Formatear resultado
         results = [
-            {"date": str(day), "units_sold": units}
-            for day, units in sorted(day_to_total.items())
+            {"date": d.isoformat(), "units_sold": day_to_total[d]}
+            for d in sorted(day_to_total)
         ]
-        total_units = sum(units for units in day_to_total.values())
+        total_units = sum(day_to_total.values())
+
         return Response({"days": results, "total_units_sold": total_units})
