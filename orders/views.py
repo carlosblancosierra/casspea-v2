@@ -421,4 +421,18 @@ class DailyUnitsSoldView(APIView):
             for d in sorted(day_to_total)
         ]
         total_units = sum(day_to_total.values())
-        return Response({"days": results, "total_units_sold": total_units})
+
+        # Add total for all sources
+        all_sources_qs = (
+            UnitsSold.objects
+            .values('date')
+            .annotate(units_sold=Sum('units_sold'))
+        )
+        all_day_to_total = {entry['date']: entry['units_sold'] for entry in all_sources_qs}
+        total_units_all_sources = sum(all_day_to_total.values())
+
+        return Response({
+            "all_sold": total_units_all_sources,  # all sources
+            "ecommerce_v2_sold": total_units,  # ecommerce-v2 only
+            "days": results,
+        })
