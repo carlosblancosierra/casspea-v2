@@ -171,3 +171,47 @@ class OrderListSerializer(serializers.ModelSerializer):
         # excluimos la orden actual por si acaso
         past_orders = [oid for oid in order_ids if oid != obj.order_id]
         return past_orders
+
+
+class CustomerOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Order
+        fields = [
+            'order_id',
+            'status',
+            'created',
+            'tracking_number',
+            'shipping_order_id',
+            'checkout_session',  # We'll use a nested serializer for minimal checkout info
+        ]
+
+    checkout_session = serializers.SerializerMethodField()
+
+    def get_checkout_session(self, obj):
+        cs = obj.checkout_session
+        return {
+            'email': cs.email,
+            'shipping_address': AddressSerializer(cs.shipping_address).data if cs.shipping_address else None,
+            'billing_address': AddressSerializer(cs.billing_address).data if cs.billing_address else None,
+            'cart': {
+                'gift_message': cs.cart.gift_message,
+                'shipping_date': cs.cart.shipping_date,
+                'items': [
+                    {
+                        'product': item.product.name,
+                        'quantity': item.quantity
+                    }
+                    for item in cs.cart.items.all()
+                ]
+            }
+        }
+
+
+class CustomerShippingDateUpdateSerializer(serializers.Serializer):
+    shipping_date = serializers.DateField(required=True)
+
+    def validate_shipping_date(self, value):
+        from django.utils import timezone
+        if value < timezone.now().date():
+            raise serializers.ValidationError("Shipping date cannot be in the past")
+        return value
