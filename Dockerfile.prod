@@ -1,7 +1,7 @@
 ###########
 # BUILDER #
 ###########
-FROM python:3.11.4-slim-buster as builder
+FROM python:3.11-slim as builder
 
 # Set work directory
 WORKDIR /usr/src/app
