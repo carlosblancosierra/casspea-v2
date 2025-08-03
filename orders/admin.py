@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Order, UnitsSold
+from .models import Order, UnitsSold, SoldSource
 
 # Register your models here.
 
@@ -16,3 +16,9 @@ class UnitsSoldAdmin(admin.ModelAdmin):
     list_display = ['source', 'date', 'units_sold']
     list_filter = ['source', 'date']
     search_fields = ['source', 'date']
+
+
+@admin.register(SoldSource)
+class SoldSourceAdmin(admin.ModelAdmin):
+    list_display = ['name']
+    search_fields = ['name']
