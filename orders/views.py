@@ -389,23 +389,23 @@ class DailyUnitsSoldView(APIView):
 
     def get(self, request):
         from carts.models import CartItem
-
+        source_fk_id = 1  # Only use source_fk=1 (ecommerce-v2)
         today = timezone.localdate()  # respeta zona horaria
-        # 1. Histórico: agrupa por fecha sumando todos los sources ya almacenados en UnitsSold
+        # 1. Histórico: agrupa por fecha sumando solo source_fk=1
         historical_qs = (
             UnitsSold.objects
+            .filter(source_fk_id=source_fk_id)
             .values('date')
             .annotate(units_sold=Sum('units_sold'))
         )
         day_to_total = {entry['date']: entry['units_sold'] for entry in historical_qs}
 
-        # 2. Día de hoy: calcular en vivo desde órdenes pagadas (todas las fuentes)
+        # 2. Día de hoy: calcular en vivo desde órdenes pagadas (solo ecommerce-v2)
         paid_today_cart_ids = (
             Order.objects
             .filter(checkout_session__payment_status='paid', created__date=today)
             .values_list('checkout_session__cart_id', flat=True)
         )
-
         today_agg = (
             CartItem.objects
             .filter(cart_id__in=paid_today_cart_ids)
@@ -416,11 +416,9 @@ class DailyUnitsSoldView(APIView):
         today_units = today_agg['units_sold'] or 0
         day_to_total[today] = today_units  # sobrescribe si existiera
 
-        # 3. Formatear resultado
         results = [
             {"date": d.isoformat(), "units_sold": day_to_total[d]}
             for d in sorted(day_to_total)
         ]
         total_units = sum(day_to_total.values())
-
         return Response({"days": results, "total_units_sold": total_units})

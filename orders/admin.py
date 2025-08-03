@@ -13,9 +13,9 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(UnitsSold)
 class UnitsSoldAdmin(admin.ModelAdmin):
-    list_display = ['source', 'date', 'units_sold']
-    list_filter = ['source', 'date']
-    search_fields = ['source', 'date']
+    list_display = ['source_fk', 'date', 'units_sold']
+    list_filter = ['source_fk', 'date']
+    search_fields = ['source_fk', 'date']
 
 
 @admin.register(SoldSource)
