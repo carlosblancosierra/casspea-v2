@@ -149,15 +149,17 @@ class UnitsSold(models.Model):
     Stores daily sold chocolates for a given source (e.g., 'ecommerce-v2').
     """
     source_fk = models.ForeignKey(SoldSource, on_delete=models.PROTECT, null=True, blank=True)
-    source = models.CharField(max_length=64)
     date = models.DateField()
     units_sold = models.PositiveIntegerField(default=0)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('source', 'date')
+        unique_together = ('source_fk', 'date')
         ordering = ['-date', '-created']
+        indexes = [
+            models.Index(fields=['source_fk', 'date']),
+        ]
 
     def __str__(self):
-        return f"{self.source} - {self.date}: {self.units_sold} units"
+        return f"{self.source_fk} - {self.date}: {self.units_sold} units"
