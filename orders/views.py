@@ -1,6 +1,6 @@
 # views.py
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import csv
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.http import HttpResponse
@@ -13,7 +13,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.authentication import SessionAuthentication
 
 from users.authentication import CustomJWTAuthentication
-from .models import Order
+from .models import Order, UnitsSold
 from .serializers import OrderListSerializer, CustomerOrderSerializer, CustomerShippingDateUpdateSerializer
 from flavours.models import Flavour
 from flavours.serializers import FlavourSerializer
@@ -381,3 +381,55 @@ class TotalUnitsSoldView(APIView):
         cart_items = CartItem.objects.filter(cart_id__in=cart_ids)
         total_units = sum(item.product.units_per_box * item.quantity for item in cart_items)
         return Response({"total_units_sold": total_units})
+
+
+class DailyUnitsSoldView(APIView):
+    """
+    GET /api/orders/daily-units-sold/
+    Returns: [{"date": "YYYY-MM-DD", "units_sold": N}, ...]
+    For each day, sums units_sold from all sources, but only checks orders and creates UnitsSold for 'ecommerce-v2'.
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        source = 'ecommerce-v2'
+        # Find all days with paid orders (ecommerce-v2)
+        paid_orders = Order.objects.filter(checkout_session__payment_status='paid')
+        from collections import defaultdict
+        date_to_cart_ids = defaultdict(list)
+        for order in paid_orders:
+            order_date = order.created.date()
+            cart_id = order.checkout_session.cart_id
+            date_to_cart_ids[order_date].append(cart_id)
+
+        from carts.models import CartItem
+        today = date.today()
+        # For each day with paid orders, ensure UnitsSold for ecommerce-v2 exists
+        for day, cart_ids in sorted(date_to_cart_ids.items()):
+            if day == today:
+                continue  # Do not cache today
+            obj, created = UnitsSold.objects.get_or_create(source=source, date=day)
+            if created:
+                cart_items = CartItem.objects.filter(cart_id__in=cart_ids)
+                total_units = sum(item.product.units_per_box * item.quantity for item in cart_items)
+                obj.units_sold = total_units
+                obj.save()
+
+        # Now, for all days present in UnitsSold, sum all sources for each day
+        all_units = UnitsSold.objects.all()
+        day_to_total = defaultdict(int)
+        for obj in all_units:
+            day_to_total[obj.date] += obj.units_sold
+        # For today, always calculate on the fly from orders (ecommerce-v2 only)
+        if today in date_to_cart_ids:
+            cart_items = CartItem.objects.filter(cart_id__in=date_to_cart_ids[today])
+            total_units = sum(item.product.units_per_box * item.quantity for item in cart_items)
+            day_to_total[today] += total_units
+        # Format results
+        results = [
+            {"date": str(day), "units_sold": units}
+            for day, units in sorted(day_to_total.items())
+        ]
+        total_units = sum(units for units in day_to_total.values())
+        return Response({"days": results, "total_units_sold": total_units})

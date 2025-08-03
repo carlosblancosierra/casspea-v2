@@ -15,5 +15,6 @@ urlpatterns = [
     path('customer/update-shipping-date/', views.CustomerOrderShippingDateUpdateView.as_view(),
          name='customer-update-shipping-date'),
     path('total-units-sold/', views.TotalUnitsSoldView.as_view(), name='total-units-sold'),
+    path('daily-units-sold/', views.DailyUnitsSoldView.as_view(), name='daily-units-sold'),
     path('<str:order_id>/', views.OrderDetailView.as_view(), name='order-detail'),
 ]

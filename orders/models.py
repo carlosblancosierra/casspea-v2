@@ -6,6 +6,7 @@ from .managers import OrderManager
 import random
 User = get_user_model()
 
+
 def generate_order_id():
     """Generate a unique order ID
     Format: CPYY-XXXX where:
@@ -23,6 +24,7 @@ def generate_order_id():
     )
 
     return f'{prefix}{random_str}'
+
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -131,3 +133,21 @@ class OrderStatusHistory(models.Model):
 
     def __str__(self):
         return f"{self.order.order_id} - {self.status}"
+
+
+class UnitsSold(models.Model):
+    """
+    Stores daily sold chocolates for a given source (e.g., 'ecommerce-v2').
+    """
+    source = models.CharField(max_length=64)
+    date = models.DateField()
+    units_sold = models.PositiveIntegerField(default=0)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('source', 'date')
+        ordering = ['-date', '-created']
+
+    def __str__(self):
+        return f"{self.source} - {self.date}: {self.units_sold} units"
