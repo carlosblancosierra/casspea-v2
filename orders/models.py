@@ -135,10 +135,20 @@ class OrderStatusHistory(models.Model):
         return f"{self.order.order_id} - {self.status}"
 
 
+class SoldSource(models.Model):
+    name = models.CharField(max_length=64)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+
 class UnitsSold(models.Model):
     """
     Stores daily sold chocolates for a given source (e.g., 'ecommerce-v2').
     """
+    source_fk = models.ForeignKey(SoldSource, on_delete=models.PROTECT, null=True, blank=True)
     source = models.CharField(max_length=64)
     date = models.DateField()
     units_sold = models.PositiveIntegerField(default=0)
