@@ -13,3 +13,9 @@ def mail_pending_sessions(*args, **kwargs):
 def test_task(*args, **kwargs):
     """Test task."""
     print("Test task")
+
+
+def send_review_requests_task(*args, **kwargs):
+    from mails.services import ReviewRequestMailProcessor
+    processor = ReviewRequestMailProcessor()
+    return processor.send_review_requests(test=False)

@@ -10,6 +10,7 @@ class EmailType(models.Model):
     ORDER_PAID = 'order_paid'
     NON_PAYED_ORDER = 'non_payed_order'
     ORDER_SHIPPING = 'order_shipping'
+    REVIEW_REQUEST = 'review_request'
 
     CHOICES = [
         (NEWSLETTER,      'Newsletter'),
@@ -17,6 +18,7 @@ class EmailType(models.Model):
         (ORDER_PAID,      'Order Paid'),
         (NON_PAYED_ORDER, 'Non-Paid Order'),
         (ORDER_SHIPPING,  'Order Shipping'),
+        (REVIEW_REQUEST,  'Review Request'),
     ]
 
     name = models.CharField(max_length=50, choices=CHOICES, unique=True)

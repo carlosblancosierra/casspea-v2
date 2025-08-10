@@ -5,6 +5,10 @@ from mails.models import EmailType, EmailSent
 from django.core.mail import EmailMessage, mail_admins
 from django.template.loader import render_to_string
 from django.conf import settings
+from orders.models import Order
+from django.contrib.contenttypes.models import ContentType
+from datetime import date
+from django.db import models  # Add this import for OuterRef
 
 
 class PendingCheckoutSessionsMailProcessor:
@@ -130,3 +134,67 @@ class OrderShippingMailProcessor:
             email.send()
         self.log_email_sent(order, is_test=test)
         return True
+
+
+class ReviewRequestMailProcessor:
+    def get_eligible_orders(self):
+        start_date = date(2025, 7, 1)
+        cutoff = timezone.now() - timedelta(days=7)
+        review_email_type, _ = EmailType.objects.get_or_create(
+            name=EmailType.REVIEW_REQUEST,
+            defaults={'template_name': 'mails/review_request.html'}
+        )
+        order_ct = ContentType.objects.get_for_model(Order)
+        # Orders paid >7 days ago, after July 1, 2025, and not already sent a review request
+        orders = (
+            Order.objects
+            .filter(
+                created__gte=start_date,
+                created__lte=cutoff,
+                checkout_session__payment_status='paid',
+            )
+            .exclude(
+                emailsent__email_type=review_email_type,
+                emailsent__content_type=order_ct,
+            )
+        )
+        return orders, review_email_type
+
+    def build_email(self, order, email_type, test=False):
+        subject = "How was your CassPea order? We'd love your review!"
+        recipient = order.email if not test else "test@test.com"
+        context = {
+            'order': order,
+            'current_year': timezone.now().year,
+        }
+        message = render_to_string(email_type.template_name, context)
+        email = EmailMessage(
+            subject=subject,
+            body=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[recipient],
+        )
+        email.content_subtype = "html"
+        return email
+
+    def log_email_sent(self, order, email_type, is_test=False):
+        order_ct = ContentType.objects.get_for_model(order.__class__)
+        EmailSent.objects.create(
+            email_type=email_type,
+            content_type=order_ct,
+            object_id=order.pk,
+            is_test=is_test
+        )
+
+    def send_review_requests(self, test=False):
+        orders, email_type = self.get_eligible_orders()
+        sent_count = 0
+        for order in orders:
+            email = self.build_email(order, email_type, test=test)
+            if test:
+                mail_admins(email.subject, email.body, html_message=email.body)
+            else:
+                email.send()
+            self.log_email_sent(order, email_type, is_test=test)
+            sent_count += 1
+        return sent_count
