@@ -58,7 +58,7 @@ class SubscribeNewsletterView(generics.CreateAPIView):
             error_message = str(e)
 
         # Log the sent email
-        email_sent = EmailSent.objects.create(
+        EmailSent.objects.create(
             email_type=email_type,
             object_id=lead.id,
             content_type=ContentType.objects.get_for_model(Lead),
@@ -71,11 +71,15 @@ class SubscribeNewsletterView(generics.CreateAPIView):
         response_data = {'message': 'Successfully subscribed to newsletter'}
 
         if status_email == 'failed':
-            response_data['error'] = error_message
+            response_data['error'] = error_message or "Unknown error"
 
         return Response(
             response_data,
-            status=status.HTTP_201_CREATED if status_email == 'sent' else status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status=(
+                status.HTTP_201_CREATED
+                if status_email == 'sent'
+                else status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
             headers=headers
         )
 
@@ -120,3 +124,187 @@ class GenericLeadSubscribeView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({'message': 'Successfully subscribed'}, status=status.HTTP_201_CREATED)
+
+
+class SendBlue20View(generics.CreateAPIView):
+    serializer_class = LeadSerializer
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        data['lead_type'] = 'landing_page'
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        lead = serializer.save()
+
+        email_type, _ = EmailType.objects.get_or_create(
+            name=EmailType.BLUE20,
+            defaults={'template_name': 'leads/mails/blue20.html'}
+        )
+        html_message = render_to_string(
+            'leads/mails/blue20.html', {}
+        )
+        subject = (
+            'Your CassPea BLUE20 Discount Code'
+        )
+        from_email = settings.DEFAULT_FROM_EMAIL
+        recipient_list = [lead.email]
+
+        try:
+            send_mail(
+                subject=subject,
+                message='',
+                from_email=from_email,
+                recipient_list=recipient_list,
+                fail_silently=False,
+                html_message=html_message,
+            )
+            status_email = 'sent'
+            sent = timezone.now()
+            error_message = None
+        except Exception as e:
+            status_email = 'failed'
+            sent = None
+            error_message = str(e)
+
+        EmailSent.objects.create(
+            email_type=email_type,
+            object_id=lead.id,
+            content_type=ContentType.objects.get_for_model(Lead),
+            status=status_email,
+            sent=sent if status_email == 'sent' else None,
+            error_message=error_message if status_email == 'failed' else None,
+        )
+
+        headers = self.get_success_headers(serializer.data)
+        response_data = {'message': 'BLUE20 code sent'}
+        if status_email == 'failed':
+            response_data['error'] = error_message or "Unknown error"
+        return Response(
+            response_data,
+            status=(
+                status.HTTP_201_CREATED
+                if status_email == 'sent'
+                else status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            headers=headers
+        )
+
+
+class SendGold20View(generics.CreateAPIView):
+    serializer_class = LeadSerializer
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        data['lead_type'] = 'landing_page'
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        lead = serializer.save()
+
+        email_type, _ = EmailType.objects.get_or_create(
+            name=EmailType.GOLD20,
+            defaults={'template_name': 'leads/mails/gold20.html'}
+        )
+        html_message = render_to_string('leads/mails/gold20.html', {})
+        subject = 'Your CassPea GOLD20 Discount Code'
+        from_email = settings.DEFAULT_FROM_EMAIL
+        recipient_list = [lead.email]
+
+        try:
+            send_mail(
+                subject=subject,
+                message='',
+                from_email=from_email,
+                recipient_list=recipient_list,
+                fail_silently=False,
+                html_message=html_message,
+            )
+            status_email = 'sent'
+            sent = timezone.now()
+            error_message = None
+        except Exception as e:
+            status_email = 'failed'
+            sent = None
+            error_message = str(e)
+
+        EmailSent.objects.create(
+            email_type=email_type,
+            object_id=lead.id,
+            content_type=ContentType.objects.get_for_model(Lead),
+            status=status_email,
+            sent=sent if status_email == 'sent' else None,
+            error_message=error_message if status_email == 'failed' else None,
+        )
+
+        headers = self.get_success_headers(serializer.data)
+        response_data = {'message': 'GOLD20 code sent'}
+        if status_email == 'failed':
+            response_data['error'] = error_message or "Unknown error"
+        return Response(
+            response_data,
+            status=(
+                status.HTTP_201_CREATED
+                if status_email == 'sent'
+                else status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            headers=headers
+        )
+
+
+class ThermomixGiveawayEntryView(generics.CreateAPIView):
+    serializer_class = LeadSerializer
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        data['lead_type'] = 'giveaway'
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        lead = serializer.save()
+
+        email_type, _ = EmailType.objects.get_or_create(
+            name=EmailType.THERMOMIX_GIVEAWAY,
+            defaults={'template_name': 'leads/mails/thermomix_giveaway.html'}
+        )
+        html_message = render_to_string('leads/mails/thermomix_giveaway.html', {})
+        subject = 'You’re in the CassPea Thermomix Giveaway!'
+        from_email = settings.DEFAULT_FROM_EMAIL
+        recipient_list = [lead.email]
+
+        try:
+            send_mail(
+                subject=subject,
+                message='',
+                from_email=from_email,
+                recipient_list=recipient_list,
+                fail_silently=False,
+                html_message=html_message,
+            )
+            status_email = 'sent'
+            sent = timezone.now()
+            error_message = None
+        except Exception as e:
+            status_email = 'failed'
+            sent = None
+            error_message = str(e)
+
+        EmailSent.objects.create(
+            email_type=email_type,
+            object_id=lead.id,
+            content_type=ContentType.objects.get_for_model(Lead),
+            status=status_email,
+            sent=sent if status_email == 'sent' else None,
+            error_message=error_message if status_email == 'failed' else None,
+        )
+
+        headers = self.get_success_headers(serializer.data)
+        response_data = {'message': 'Giveaway entry confirmed'}
+        if status_email == 'failed':
+            response_data['error'] = error_message or "Unknown error"
+        return Response(
+            response_data,
+            status=(
+                status.HTTP_201_CREATED
+                if status_email == 'sent'
+                else status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            headers=headers
+        )
