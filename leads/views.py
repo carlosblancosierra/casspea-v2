@@ -107,3 +107,16 @@ class CSVLeadsView(APIView):
         for lead in queryset:
             writer.writerow([getattr(lead, field) for field in headers])
         return response
+
+
+class GenericLeadSubscribeView(generics.CreateAPIView):
+    """
+    Endpoint to subscribe any type of lead. Email is required, other fields are optional.
+    """
+    serializer_class = LeadSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'message': 'Successfully subscribed'}, status=status.HTTP_201_CREATED)
