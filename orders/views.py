@@ -1,6 +1,4 @@
-# views.py
-
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, time
 import csv
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.http import HttpResponse
@@ -16,10 +14,12 @@ from users.authentication import CustomJWTAuthentication
 from .models import Order, UnitsSold
 from .serializers import OrderListSerializer, CustomerOrderSerializer, CustomerShippingDateUpdateSerializer
 from flavours.models import Flavour
-from flavours.serializers import FlavourSerializer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.db.models import IntegerField
+from carts.models import CartItem
+from django.db.models import Max
 from rest_framework import status
 
 
@@ -384,55 +384,59 @@ class TotalUnitsSoldView(APIView):
 
 
 class DailyUnitsSoldView(APIView):
+    """
+    GET /api/orders/daily-units-sold/
+    Returns:
+        { "all_sold": <int> }
+    """
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        from carts.models import CartItem
-        source_fk_id = 1  # Only use source_fk=1 (ecommerce-v2)
-        today = timezone.localdate()  # respeta zona horaria
-        # 1. Histórico: agrupa por fecha sumando solo source_fk=1
-        historical_qs = (
-            UnitsSold.objects
-            .filter(source_fk_id=source_fk_id)
-            .values('date')
-            .annotate(units_sold=Sum('units_sold'))
-        )
-        day_to_total = {entry['date']: entry['units_sold'] for entry in historical_qs}
+        SOURCE_ECOMMERCE_V2 = 1
 
-        # 2. Día de hoy: calcular en vivo desde órdenes pagadas (solo ecommerce-v2)
-        paid_today_cart_ids = (
+        # 1) Historical total across ALL sources
+        historical_total = UnitsSold.objects.aggregate(
+            total=Sum('units_sold')
+        )['total'] or 0
+
+        # 2) Last recorded ecommerce v2 day
+        last_ecom_date = (
+            UnitsSold.objects
+            .filter(source_fk_id=SOURCE_ECOMMERCE_V2)
+            .aggregate(d=Max('date'))
+        )['d']
+
+        if last_ecom_date is None:
+            return Response(
+                {"detail": "No UnitsSold rows for ecommerce v2. Backfill required."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Start strictly AFTER the last recorded day to avoid double counting
+        start_date = last_ecom_date + timedelta(days=1)
+        start_dt = timezone.make_aware(datetime.combine(start_date, time.min))
+
+        # 3) Live increment: paid ecommerce v2 carts from start_date..today
+        paid_orders = (
             Order.objects
-            .filter(checkout_session__payment_status='paid', created__date=today)
+            .filter(
+                checkout_session__payment_status='paid',
+                created__gte=start_dt
+            )
             .values_list('checkout_session__cart_id', flat=True)
         )
-        today_agg = (
+        cart_ids = [cid for cid in paid_orders if cid]
+
+        units_expr = ExpressionWrapper(
+            F('product__units_per_box') * F('quantity'),
+            output_field=IntegerField()
+        )
+        live_increment = (
             CartItem.objects
-            .filter(cart_id__in=paid_today_cart_ids)
-            .aggregate(
-                units_sold=Sum(F('product__units_per_box') * F('quantity'))
-            )
-        )
-        today_units = today_agg['units_sold'] or 0
-        day_to_total[today] = today_units  # sobrescribe si existiera
+            .filter(cart_id__in=cart_ids)
+            .aggregate(units=Sum(units_expr))
+        )['units'] or 0
 
-        results = [
-            {"date": d.isoformat(), "units_sold": day_to_total[d]}
-            for d in sorted(day_to_total)
-        ]
-        total_units = sum(day_to_total.values())
-
-        # Add total for all sources
-        all_sources_qs = (
-            UnitsSold.objects
-            .values('date')
-            .annotate(units_sold=Sum('units_sold'))
-        )
-        all_day_to_total = {entry['date']: entry['units_sold'] for entry in all_sources_qs}
-        total_units_all_sources = sum(all_day_to_total.values())
-
-        return Response({
-            "all_sold": total_units_all_sources,  # all sources
-            "ecommerce_v2_sold": total_units,  # ecommerce-v2 only
-            "days": results,
-        })
+        all_sold = historical_total + live_increment
+        return Response({"all_sold": all_sold})
