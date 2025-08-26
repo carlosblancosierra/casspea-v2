@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Cart, CartItem, CartItemBoxCustomization, CartItemBoxFlavorSelection, CartItemPackCustomization
+from .models import (
+    Cart,
+    CartItem,
+    CartItemBoxCustomization,
+    CartItemBoxFlavorSelection,
+    CartItemPackCustomization,
+)
 
 
 class BoxFlavorSelectionInline(admin.TabularInline):
@@ -8,6 +14,7 @@ class BoxFlavorSelectionInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['created', 'updated']
     classes = ['collapse']
+    autocomplete_fields = ['flavor', 'box_customization']
 
 
 class PackFlavorSelectionInline(admin.TabularInline):
@@ -16,15 +23,25 @@ class PackFlavorSelectionInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['created', 'updated']
     classes = ['collapse']
+    autocomplete_fields = ['flavor', 'pack_customization']
 
 
 class CartItemBoxCustomizationInline(admin.TabularInline):
     model = CartItemBoxCustomization
     extra = 0
     readonly_fields = ['created', 'updated']
-    inlines = [BoxFlavorSelectionInline]
     show_change_link = True
     classes = ['collapse']
+    autocomplete_fields = ['cart_item']
+
+
+class CartItemPackCustomizationInline(admin.TabularInline):
+    model = CartItemPackCustomization
+    extra = 0
+    readonly_fields = ['created', 'updated']
+    show_change_link = True
+    classes = ['collapse']
+    autocomplete_fields = ['cart_item']
 
 
 class CartItemInline(admin.StackedInline):
@@ -32,21 +49,22 @@ class CartItemInline(admin.StackedInline):
     extra = 0
     readonly_fields = ['created', 'updated']
     show_change_link = True
-    inlines = [CartItemBoxCustomizationInline]
+    inlines = [CartItemBoxCustomizationInline, CartItemPackCustomizationInline]
     classes = ['collapse']
-
-    def get_formset(self, request, obj=None, **kwargs):
-        formset = super().get_formset(request, obj, **kwargs)
-        return formset
+    autocomplete_fields = ['cart', 'product']
 
 
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
-    list_display = ['id', 'session_id', 'user', 'discount', 'created', 'updated', 'get_total', 'get_items_count']
+    list_display = [
+        'id', 'session_id', 'user', 'discount', 'created', 'updated',
+        'get_total', 'get_items_count'
+    ]
     list_filter = ['created', 'updated']
     search_fields = ['session_id', 'user__email']
     readonly_fields = ['created', 'updated', 'get_total', 'get_items_count']
     inlines = [CartItemInline]
+    autocomplete_fields = ['user', 'discount']
 
     def get_total(self, obj):
         return f"£{sum(item.quantity * item.product.base_price for item in obj.items.all())}"
@@ -79,6 +97,7 @@ class CartItemBoxCustomizationAdmin(admin.ModelAdmin):
     search_fields = ['cart_item__cart__session_id']
     readonly_fields = ['created', 'updated']
     inlines = [BoxFlavorSelectionInline]
+    autocomplete_fields = ['cart_item', 'allergens']
 
 
 class CartItemPackCustomizationAdmin(admin.ModelAdmin):
@@ -87,7 +106,7 @@ class CartItemPackCustomizationAdmin(admin.ModelAdmin):
     search_fields = ['cart_item__cart__session_id']
     readonly_fields = ['created', 'updated']
     inlines = [PackFlavorSelectionInline]
-    autocomplete_fields = ['cart_item']
+    autocomplete_fields = ['cart_item', 'allergens', 'hot_chocolate', 'gift_card', 'chocolate_bark']
 
 
 class CartItemAdmin(admin.ModelAdmin):
@@ -95,7 +114,8 @@ class CartItemAdmin(admin.ModelAdmin):
     list_filter = ['created', 'updated']
     search_fields = ['cart__session_id', 'product__name', 'id']
     readonly_fields = ['created', 'updated']
-    inlines = [CartItemBoxCustomizationInline]
+    inlines = [CartItemBoxCustomizationInline, CartItemPackCustomizationInline]
+    autocomplete_fields = ['cart', 'product']
 
     fieldsets = (
         ('Cart Item Information', {
