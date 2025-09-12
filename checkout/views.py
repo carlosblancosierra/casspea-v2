@@ -14,6 +14,7 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
+
 class CheckoutViewSet(viewsets.ViewSet):
     """
     Checkout process management.
@@ -200,6 +201,15 @@ class CheckoutViewSet(viewsets.ViewSet):
                 )
 
             checkout_session.shipping_option = shipping_option
+
+            pickup_date = request.data.get('pickup_date')
+            pickup_time = request.data.get('pickup_time')
+            cart = checkout_session.cart
+            if pickup_date and pickup_time:
+                cart.pickup_date = pickup_date
+                cart.pickup_time = pickup_time
+                cart.save()
+
             checkout_session.save()
 
             return Response(
