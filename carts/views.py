@@ -12,6 +12,8 @@ from .serializers import (
     CartUpdateSerializer,
     CartItemQuantityUpdateSerializer,
 )
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 
 logger = logging.getLogger(__name__)
 
