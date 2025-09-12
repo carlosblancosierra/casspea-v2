@@ -1,15 +1,16 @@
+from .managers import CheckoutSessionManager
+from shipping.models import ShippingOption
+from addresses.models import Address
 from django.db import models
 from django.contrib.auth import get_user_model
 from decimal import Decimal, ROUND_HALF_UP, ROUND_UP
 from django.contrib.contenttypes.fields import GenericRelation
 
 User = get_user_model()
-from addresses.models import Address
-from shipping.models import ShippingOption
 
-from .managers import CheckoutSessionManager
 
 # Create your models here.
+
 class CheckoutSession(models.Model):
     class Status(models.TextChoices):
         PENDING = 'pending'
@@ -62,8 +63,6 @@ class CheckoutSession(models.Model):
         blank=True
     )
 
-    pickup_day
-
     # Add GenericRelation to link EmailSent records
     emailsent = GenericRelation('mails.EmailSent', related_query_name='emailsent')
 
@@ -86,7 +85,7 @@ class CheckoutSession(models.Model):
 
         # Free shipping logic for Regular 48
         if (self.shipping_option.delivery_speed == 'REGULAR' and
-            self.cart.base_total >= 50):
+                self.cart.base_total >= 50):
             return 0
 
         return self.shipping_option.cents
@@ -131,5 +130,3 @@ class CheckoutSession(models.Model):
                 },
             },
         }
-
-
