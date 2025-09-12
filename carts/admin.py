@@ -14,7 +14,7 @@ class BoxFlavorSelectionInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['created', 'updated']
     classes = ['collapse']
-    autocomplete_fields = ['flavor', 'box_customization']
+    # autocomplete_fields = ['flavor', 'box_customization']
 
 
 class PackFlavorSelectionInline(admin.TabularInline):
@@ -23,7 +23,7 @@ class PackFlavorSelectionInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['created', 'updated']
     classes = ['collapse']
-    autocomplete_fields = ['flavor', 'pack_customization']
+    # autocomplete_fields = ['flavor', 'pack_customization']
 
 
 class CartItemBoxCustomizationInline(admin.TabularInline):
@@ -94,19 +94,19 @@ class CartAdmin(admin.ModelAdmin):
 class CartItemBoxCustomizationAdmin(admin.ModelAdmin):
     list_display = ['id', 'cart_item', 'selection_type', 'created', 'updated']
     list_filter = ['selection_type', 'created', 'updated']
-    search_fields = ['cart_item__cart__session_id']
+    # search_fields = ['cart_item__cart__session_id']
     readonly_fields = ['created', 'updated']
     inlines = [BoxFlavorSelectionInline]
-    autocomplete_fields = ['cart_item', 'allergens']
+    # autocomplete_fields = ['cart_item', 'allergens']
 
 
 class CartItemPackCustomizationAdmin(admin.ModelAdmin):
     list_display = ['id', 'cart_item', 'selection_type', 'created', 'updated']
     list_filter = ['selection_type', 'created', 'updated']
-    search_fields = ['cart_item__cart__session_id']
+    # search_fields = ['cart_item__cart__session_id']
     readonly_fields = ['created', 'updated']
     inlines = [PackFlavorSelectionInline]
-    autocomplete_fields = ['cart_item', 'allergens', 'hot_chocolate', 'gift_card', 'chocolate_bark']
+    # autocomplete_fields = ['cart_item', 'allergens', 'hot_chocolate', 'gift_card', 'chocolate_bark']
 
 
 class CartItemAdmin(admin.ModelAdmin):
