@@ -83,6 +83,8 @@ class CartSerializer(serializers.ModelSerializer):
     discount = DiscountSerializer(read_only=True)
     gift_message = serializers.CharField(max_length=255, required=False, allow_blank=True, allow_null=True)
     shipping_date = serializers.DateField(required=False, allow_null=True)
+    pickup_date = serializers.DateField(required=False, allow_null=True)
+    pickup_time = serializers.TimeField(required=False, allow_null=True)
     base_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discounted_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     total_savings = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -96,6 +98,8 @@ class CartSerializer(serializers.ModelSerializer):
             'discount',
             'gift_message',
             'shipping_date',
+            'pickup_date',
+            'pickup_time',
             'base_total',
             'discounted_total',
             'total_savings',

@@ -4,13 +4,14 @@ from checkout.models import CheckoutSession
 from addresses.serializers import AddressSerializer
 from carts.models import CartItem
 from carts.models import (
-    Cart,
+    Cart, CartItemBoxCustomization,
     CartItemBoxFlavorSelection,
     CartItemPackCustomization
 )
 from products.models import Product
 from checkout.models import ShippingOption
-from carts.serializers import CartItemBoxCustomizationSerializer
+from allergens.serializers import AllergenSerializer
+
 
 
 class OrderProductSerializer(serializers.ModelSerializer):
@@ -40,6 +41,14 @@ class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
         model = CartItemPackCustomization
         fields = '__all__'
 
+
+class CartItemBoxCustomizationSerializer(serializers.ModelSerializer):
+    flavor_selections = CartItemBoxFlavorSelectionSerializer(many=True)
+    
+
+    class Meta:
+        model = CartItemBoxCustomization
+        fields = ['id', 'selection_type', 'allergens', 'flavor_selections']
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = OrderProductSerializer()

@@ -14,6 +14,8 @@ class Cart(models.Model):
     discount = models.ForeignKey(Discount, null=True, blank=True, on_delete=models.SET_NULL)
     gift_message = models.CharField(max_length=255, null=True, blank=True)
     shipping_date = models.DateField(null=True, blank=True)
+    pickup_date = models.DateField(null=True, blank=True)
+    pickup_time = models.CharField(null=True, blank=True)
 
     active = models.BooleanField(default=True)
 

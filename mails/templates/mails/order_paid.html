@@ -275,6 +275,12 @@
             <br>{{ order.shipping_address.postcode }}
             <br>{{ order.shipping_address.country }}</p>
             <p style="color:rgb(215, 28, 28);"><strong>Shipping Date:</strong> {{ order.checkout_session.cart.shipping_date }}</p>
+            {% if order.checkout_session.cart.pickup_date %}
+                <p style="color:rgb(215, 28, 28);"><strong>Pickup Date:</strong> {{ order.checkout_session.cart.pickup_date }}</p>
+            {% endif %}
+            {% if order.checkout_session.cart.pickup_time %}
+                <p style="color:rgb(215, 28, 28);"><strong>Pickup Time:</strong> {{ order.checkout_session.cart.pickup_time }}</p>
+            {% endif %}
             <p>This is our target dispatch date for your order. Please note that actual delivery times may vary depending on the shipping method you&apos;ve chosen and current Royal Mail service levels.</p>
             <h2>Billing Information</h2>
             <p><strong>Billing Address:</strong><br>

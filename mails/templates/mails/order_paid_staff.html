@@ -302,8 +302,10 @@
             <p><strong>Email:</strong> {{ order.email }}</p>
             <p><strong>Phone:</strong> {{ order.checkout_session.phone }}</p>
 
-            <h2>Shipping Date</h2>
+            <h2>Shipping</h2>
             <p><strong>Shipping Date:</strong> {{ order.checkout_session.cart.shipping_date }}</p>
+            <p><strong>Pickup Date:</strong> {{ order.checkout_session.cart.pickup_date }}</p>
+            <p><strong>Pickup Time:</strong> {{ order.checkout_session.cart.pickup_time }}</p>
             <p><strong>Shipping Option:</strong> {{ order.checkout_session.shipping_option.name }}</p>
             <p><strong>Shipping Cost:</strong> £{{ order.checkout_session.shipping_cost_pounds }}</p>
 

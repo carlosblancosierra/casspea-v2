@@ -27,6 +27,92 @@ class CartView(APIView):
         serializer = CartSerializer(cart)
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Update cart details",
+        request=inline_serializer(
+            name='CartDetailsUpdate',
+            fields={
+                'gift_message': serializers.CharField(
+                    required=False,
+                    allow_null=True,
+                    help_text="Optional gift message"
+                ),
+                'shipping_date': serializers.DateField(
+                    required=False,
+                    allow_null=True,
+                    help_text="Optional shipping date (YYYY-MM-DD)"
+                ),
+                'discount_code': serializers.CharField(
+                    required=False,
+                    allow_null=True,
+                    help_text="Discount code to apply"
+                ),
+                'remove_discount': serializers.BooleanField(
+                    required=False,
+                    help_text="Set to true to remove the current discount"
+                ),
+                'pickup_date': serializers.DateField(
+                    required=False,
+                    allow_null=True,
+                    help_text="Optional pickup date (YYYY-MM-DD)"
+                ),
+                'pickup_time': serializers.TimeField(
+                    required=False,
+                    allow_null=True,
+                    help_text="Optional pickup time (HH:MM)"
+                )
+            }
+        ),
+        responses={
+            200: CartSerializer,
+            400: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                'Complete Example',
+                value={
+                    'gift_message': 'Happy Birthday!',
+                    'shipping_date': '2024-12-25',
+                    'discount_code': 'BLACK24',
+                    'pickup_date': '2024-12-25',
+                    'pickup_time': '10:00'
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Remove Discount Example',
+                value={'remove_discount': True},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Gift Message Example',
+                value={'gift_message': 'Happy Birthday!'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Shipping Date Example',
+                value={'shipping_date': '2024-12-25'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Pickup Date Example',
+                value={'pickup_date': '2024-12-25'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Pickup Time Example',
+                value={'pickup_time': '10:00'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Discount Example',
+                value={'discount_code': 'SUMMER2023'},
+                request_only=True,
+            ),
+
+        ],
+        description="Update cart with optional gift message, shipping date, and/or discount code"
+    )
     def post(self, request):
         """Update cart details"""
         cart = self.get_cart(request)

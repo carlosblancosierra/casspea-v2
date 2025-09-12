@@ -62,6 +62,8 @@ class CheckoutSession(models.Model):
         blank=True
     )
 
+    pickup_day
+
     # Add GenericRelation to link EmailSent records
     emailsent = GenericRelation('mails.EmailSent', related_query_name='emailsent')
 
