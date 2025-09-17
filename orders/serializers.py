@@ -99,6 +99,8 @@ class CartSerializer(serializers.ModelSerializer):
             'discount',
             'gift_message',
             'shipping_date',
+            'pickup_date',
+            'pickup_time',
             'base_total',
             'discounted_total',
             'total_savings',

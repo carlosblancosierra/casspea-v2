@@ -174,6 +174,18 @@ class CheckoutViewSet(viewsets.ViewSet):
         summary="Update shipping option",
         description="Updates the shipping option for the checkout session",
         request={"shipping_option_id": "integer"},
+        examples=[
+            OpenApiExample(
+                'Update Pickup Date and Time',
+                summary="Update pickup date and time",
+                description="Example of updating pickup date and time",
+                value={
+                    "pickup_date": "2024-12-25",
+                    "pickup_time": "10:00"
+                },
+                request_only=True,
+            )
+        ],
         responses={200: CheckoutSessionSerializer}
     )
     @action(detail=True, methods=['post'], url_path='shipping-option')
