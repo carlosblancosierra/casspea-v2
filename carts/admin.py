@@ -79,7 +79,7 @@ class CartAdmin(admin.ModelAdmin):
             'fields': ('user', 'session_id', 'discount', 'active')
         }),
         ('Additional Information', {
-            'fields': ('gift_message', 'shipping_date')
+            'fields': ('gift_message', 'shipping_date', 'pickup_date', 'pickup_time')
         }),
         ('Metrics', {
             'fields': ('get_total', 'get_items_count')
