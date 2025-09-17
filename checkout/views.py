@@ -211,9 +211,37 @@ class CheckoutViewSet(viewsets.ViewSet):
             )
             cart = checkout_session.cart
             if pickup_date and pickup_time:
-                cart.pickup_date = pickup_date
-                cart.pickup_time = pickup_time
-                cart.save()
+                try:
+                    # Ensure pickup_date is a date object
+                    from datetime import datetime
+                    if isinstance(pickup_date, str):
+                        try:
+                            cart.pickup_date = datetime.strptime(pickup_date, "%Y-%m-%d").date()
+                        except ValueError as ve:
+                            logger.error(
+                                "cart_pickup_date_parse_error",
+                                error=str(ve),
+                                pickup_date=pickup_date
+                            )
+                            cart.pickup_date = None
+                    else:
+                        cart.pickup_date = pickup_date
+                    cart.pickup_time = pickup_time
+                    cart.save()
+                    logger.info(
+                        "cart_pickup_saved",
+                        cart_id=cart.id,
+                        pickup_date=str(cart.pickup_date),
+                        pickup_time=str(cart.pickup_time)
+                    )
+                except Exception as e:
+                    logger.error(
+                        "cart_pickup_save_error",
+                        error=str(e),
+                        cart_id=cart.id,
+                        pickup_date=str(cart.pickup_date),
+                        pickup_time=str(cart.pickup_time)
+                    )
 
             checkout_session.save()
 
