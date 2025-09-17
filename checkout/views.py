@@ -204,6 +204,11 @@ class CheckoutViewSet(viewsets.ViewSet):
 
             pickup_date = request.data.get('pickup_date')
             pickup_time = request.data.get('pickup_time')
+            logger.info(
+                "updating_pickup_date_and_time",
+                pickup_date=pickup_date,
+                pickup_time=pickup_time
+            )
             cart = checkout_session.cart
             if pickup_date and pickup_time:
                 cart.pickup_date = pickup_date
