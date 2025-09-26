@@ -8,9 +8,12 @@ from storages.backends.s3boto3 import S3Boto3Storage
 s3_storage = S3Boto3Storage(location='media')
 
 # Create your models here.
+
+
 class FlavourCategoryManager(models.Manager):
     def active(self):
         return self.filter(active=True)
+
 
 class FlavourCategory(models.Model):
     name = models.CharField(max_length=255)
@@ -22,9 +25,11 @@ class FlavourCategory(models.Model):
     def __str__(self):
         return self.name
 
+
 class FlavourManager(models.Manager):
     def active(self):
         return self.filter(active=True)
+
 
 class Flavour(models.Model):
     name = models.CharField(max_length=255)
@@ -32,6 +37,8 @@ class Flavour(models.Model):
     description = models.TextField()
     mini_description = models.TextField()
     allergens = models.ManyToManyField(Allergen)
+    featured = models.BooleanField(default=False)
+    featured_message = models.TextField(null=True, blank=True)
 
     # Main images
     image = models.ImageField(
@@ -54,6 +61,7 @@ class Flavour(models.Model):
 
     class Meta:
         ordering = ['name']
+
 
 class FlavourSelection(models.Model):
     flavour = models.ForeignKey(Flavour, on_delete=models.CASCADE)
