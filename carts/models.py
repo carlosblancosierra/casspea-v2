@@ -82,8 +82,8 @@ class CartItem(models.Model):
 
     @property
     def base_price(self):
-        """Calculate the base price for this item"""
-        return self.product.base_price * self.quantity
+        """Calculate the base price for this item, using current_price (preorder aware)."""
+        return self.product.current_price * self.quantity
 
     @property
     def discounted_price(self):

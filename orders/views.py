@@ -156,7 +156,7 @@ def export_product_sales_csv(request):
             total_cost=Sum(
                 ExpressionWrapper(
                     F('checkout_session__cart__items__quantity') *
-                    F('checkout_session__cart__items__product__base_price'),
+                    F('checkout_session__cart__items__product__current_price'),
                     output_field=DecimalField(max_digits=12, decimal_places=2)
                 )
             )

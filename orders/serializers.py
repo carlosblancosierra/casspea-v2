@@ -13,7 +13,6 @@ from checkout.models import ShippingOption
 from allergens.serializers import AllergenSerializer
 
 
-
 class OrderProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
@@ -44,11 +43,11 @@ class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
 
 class CartItemBoxCustomizationSerializer(serializers.ModelSerializer):
     flavor_selections = CartItemBoxFlavorSelectionSerializer(many=True)
-    
 
     class Meta:
         model = CartItemBoxCustomization
         fields = ['id', 'selection_type', 'allergens', 'flavor_selections']
+
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = OrderProductSerializer()
@@ -109,7 +108,7 @@ class CartSerializer(serializers.ModelSerializer):
     def get_total(self, obj):
         return str(
             sum(
-                item.quantity * item.product.base_price
+                item.quantity * item.product.current_price
                 for item in obj.items.all()
             )
         )

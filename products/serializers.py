@@ -35,6 +35,7 @@ class ProductGalleryImageSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    current_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     category = ProductCategoryShallowSerializer()
     gallery_images = ProductGalleryImageSerializer(many=True, read_only=True)
 
@@ -64,6 +65,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'preorder',
             'preorder_price',
             'preorder_finish_date',
+            'current_price',
             'created',
             'updated'
         ]

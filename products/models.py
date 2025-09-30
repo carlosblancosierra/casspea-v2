@@ -6,6 +6,7 @@ from PIL import Image
 from io import BytesIO
 from django.core.files.base import ContentFile
 import os
+from django.utils import timezone
 
 s3_storage = S3Boto3Storage(location='media')
 
@@ -225,6 +226,23 @@ class Product(models.Model):
         if self.thumbnail_webp:
             self.thumbnail_webp.delete()
         super().delete(*args, **kwargs)
+
+    @property
+    def is_preorder_active(self):
+        """Return True if preorder is active, preorder_price is set, finish date is set, and today is less than or equal to finish date."""
+        return (
+            self.preorder and
+            self.preorder_price is not None and
+            self.preorder_finish_date is not None and
+            self.preorder_finish_date >= timezone.now().date()
+        )
+
+    @property
+    def current_price(self):
+        """Return preorder_price if preorder is active, else base_price."""
+        if self.is_preorder_active:
+            return self.preorder_price
+        return self.base_price
 
 
 class ProductGalleryImage(models.Model):
