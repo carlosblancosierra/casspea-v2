@@ -119,7 +119,7 @@ class CartItemBoxCustomization(models.Model):
     ]
 
     cart_item = models.OneToOneField(CartItem, related_name='box_customization', on_delete=models.CASCADE)
-    selection_type = models.CharField(max_length=20, choices=SELECTION_TYPE_CHOICES)
+    selection_type = models.CharField(max_length=20, choices=SELECTION_TYPE_CHOICES, null=True, blank=True)
     allergens = models.ManyToManyField(Allergen, blank=True)
 
     created = models.DateTimeField(auto_now_add=True)
@@ -136,7 +136,7 @@ class CartItemPackCustomization(models.Model):
     ]
 
     cart_item = models.OneToOneField(CartItem, related_name='pack_customization', on_delete=models.CASCADE)
-    selection_type = models.CharField(max_length=20, choices=SELECTION_TYPE_CHOICES)
+    selection_type = models.CharField(max_length=20, choices=SELECTION_TYPE_CHOICES, null=True, blank=True)
     allergens = models.ManyToManyField(Allergen, blank=True)
 
     created = models.DateTimeField(auto_now_add=True)
