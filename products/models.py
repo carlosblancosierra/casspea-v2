@@ -94,6 +94,8 @@ class Product(models.Model):
     preorder_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     preorder_finish_date = models.DateField(null=True, blank=True)
 
+    can_pick_allergens = models.BooleanField(default=False)
+
     image = models.ImageField(
         upload_to='flavours',
         storage=s3_storage,

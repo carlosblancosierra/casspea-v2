@@ -68,6 +68,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'preorder_finish_date',
             'is_preorder_active',
             'current_price',
+            'can_pick_allergens',
             'created',
             'updated'
         ]
