@@ -83,8 +83,9 @@ class CheckoutSession(models.Model):
         if not self.shipping_option:
             return 0
 
-        # Free shipping logic for Regular 48
-        if (self.shipping_option.delivery_speed == 'REGULAR' and
+        # Free shipping logic for options costing £5.00 or less when cart >= £50
+        if (self.shipping_option.cents and
+                self.shipping_option.cents <= 500 and
                 self.cart.base_total >= 50):
             return 0
 
