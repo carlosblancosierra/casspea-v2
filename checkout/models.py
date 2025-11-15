@@ -86,7 +86,7 @@ class CheckoutSession(models.Model):
         # Free shipping logic for options costing £5.00 or less when cart >= £50
         if (self.shipping_option.cents and
                 self.shipping_option.cents <= 500 and
-                self.cart.base_total >= 50):
+                self.cart.discounted_total >= 50):
             return 0
 
         return self.shipping_option.cents
