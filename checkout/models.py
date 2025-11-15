@@ -83,13 +83,14 @@ class CheckoutSession(models.Model):
         if not self.shipping_option:
             return 0
 
-        # Free shipping logic for options costing £5.00 or less when cart >= £50
-        if (self.shipping_option.cents and
-                self.shipping_option.cents <= 500 and
-                self.cart.discounted_total >= 50):
-            return 0
+        base_shipping_cost = self.shipping_option.cents
 
-        return self.shipping_option.cents
+        # Apply £4.99 discount to all shipping options when cart >= £50
+        if self.cart.discounted_total >= 50:
+            discount_amount = 499  # £4.99 in cents
+            base_shipping_cost = max(base_shipping_cost - discount_amount, 0)
+
+        return base_shipping_cost
 
     @property
     def shipping_cost_pounds(self):
