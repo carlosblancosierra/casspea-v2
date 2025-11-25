@@ -2,15 +2,21 @@ from rest_framework import serializers
 from .models import Order
 from checkout.models import CheckoutSession
 from addresses.serializers import AddressSerializer
-from carts.models import CartItem
 from carts.models import (
-    Cart, CartItemBoxCustomization,
+    Cart,
+    CartItem,
+    CartItemBoxCustomization,
     CartItemBoxFlavorSelection,
-    CartItemPackCustomization
+    CartItemPackCustomization,
 )
 from products.models import Product
 from checkout.models import ShippingOption
-from allergens.serializers import AllergenSerializer
+from carts.serializers import (
+    CartItemBoxCustomizationSerializer,
+    CartItemPackCustomizationSerializer,
+    CartItemSerializer,
+    CartSerializer,
+)
 
 
 class OrderProductSerializer(serializers.ModelSerializer):
@@ -39,14 +45,6 @@ class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = CartItemPackCustomization
         fields = '__all__'
-
-
-class CartItemBoxCustomizationSerializer(serializers.ModelSerializer):
-    flavor_selections = CartItemBoxFlavorSelectionSerializer(many=True)
-
-    class Meta:
-        model = CartItemBoxCustomization
-        fields = ['id', 'selection_type', 'allergens', 'flavor_selections']
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -192,7 +190,7 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
             'created',
             'tracking_number',
             'shipping_order_id',
-            'checkout_session',  # We'll use a nested serializer for minimal checkout info
+            'checkout_session', 
         ]
 
     checkout_session = serializers.SerializerMethodField()
