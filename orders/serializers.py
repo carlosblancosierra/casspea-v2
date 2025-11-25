@@ -40,13 +40,6 @@ class CartItemBoxFlavorSelectionSerializer(serializers.ModelSerializer):
         model = CartItemBoxFlavorSelection
         fields = ['id', 'flavor_name', 'quantity']
 
-
-class CartItemPackCustomizationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CartItemPackCustomization
-        fields = '__all__'
-
-
 class CartItemSerializer(serializers.ModelSerializer):
     product = OrderProductSerializer()
     box_customization = CartItemBoxCustomizationSerializer()
