@@ -150,7 +150,7 @@ def stripe_webhook(request):
                                 subject='Your CassPea Order Confirmation',
                                 message='Thank you for your order!',
                                 from_email=settings.DEFAULT_FROM_EMAIL,
-                                recipient_list=[recipient_email, 'info@casspea.com'],
+                                recipient_list=[recipient_email],
                                 html_message=html_content,
                                 fail_silently=False,
                             )
