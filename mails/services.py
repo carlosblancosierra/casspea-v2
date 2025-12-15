@@ -8,7 +8,7 @@ from django.conf import settings
 from orders.models import Order
 from django.contrib.contenttypes.models import ContentType
 from datetime import date
-from django.db import models  # Add this import for OuterRef
+import traceback
 
 
 class PendingCheckoutSessionsMailProcessor:
@@ -37,7 +37,7 @@ class PendingCheckoutSessionsMailProcessor:
         return sessions, email_type
 
     def build_email(self, session, email_type, test=False):
-        subject = "Complete Your CassPea Order and Save 10%!"
+        subject = "Complete Your CassPea Order and Save 15%!"
         recipient = session.email if not test else "test@test.com"
         context = {
             'checkout_session': session,
@@ -79,16 +79,23 @@ class PendingCheckoutSessionsMailProcessor:
         return sessions.count()
 
     def send_pending_mails_dry_run(self):
-        """Dry run: Output session details without sending emails or logging."""
+        """
+        Dry run: Output session details without sending emails or logging.
+        """
         sessions, _ = self.get_pending_checkout_sessions()
         for session in sessions:
             cart = getattr(session, 'cart', None)
             cart_id = getattr(cart, "id", "None")
             cart_total = getattr(cart, "total", "None")
-            created = session.created.strftime('%Y-%m-%d %H:%M:%S') if session.created else "Unknown"
+            created = (
+                session.created.strftime('%Y-%m-%d %H:%M:%S')
+                if session.created
+                else "Unknown"
+            )
             print(
-                f"Session ID: {session.id}, Cart ID: {cart_id}, Cart Total: {cart_total}, "
-                f"Email: {session.email}, Created: {created}"
+                f"Session ID: {session.id}, Cart ID: {cart_id}, "
+                f"Cart Total: {cart_total}, Email: {session.email}, "
+                f"Created: {created}"
             )
         return sessions.count()
 
@@ -145,7 +152,8 @@ class ReviewRequestMailProcessor:
             defaults={'template_name': 'mails/review_request.html'}
         )
         order_ct = ContentType.objects.get_for_model(Order)
-        # Orders paid >7 days ago, after July 1, 2025, and not already sent a review request
+        # Orders paid >7 days ago, after July 1, 2025,
+        # and not already sent a review request
         orders = (
             Order.objects
             .filter(
@@ -198,3 +206,50 @@ class ReviewRequestMailProcessor:
             self.log_email_sent(order, email_type, is_test=test)
             sent_count += 1
         return sent_count
+
+
+def send_error_notification_to_admins(
+    error_type, error_message, context_data=None
+):
+    """
+    Send error notification to admins.
+
+    Args:
+        error_type: Type of error (e.g., 'Stripe Error', '500 Error')
+        error_message: The error message
+        context_data: Additional context data as a dictionary
+    """
+    subject = f"CassPea {error_type} Alert"
+
+    # Build the error message body
+    body_parts = [
+        f"Error Type: {error_type}",
+        f"Error Message: {error_message}",
+        f"Timestamp: {timezone.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+        "",
+    ]
+
+    # Add context data if provided
+    if context_data:
+        body_parts.append("Context Data:")
+        for key, value in context_data.items():
+            body_parts.append(f"  {key}: {value}")
+        body_parts.append("")
+
+    # Add traceback if available
+    tb = traceback.format_exc()
+    if tb and tb != "NoneType: None\n":
+        body_parts.append("Traceback:")
+        body_parts.append(tb)
+
+    body = "\n".join(body_parts)
+
+    try:
+        mail_admins(
+            subject=subject,
+            message=body,
+            fail_silently=True,  # Don't raise exceptions if email fails
+        )
+    except Exception as e:
+        # Log the error but don't raise to avoid cascading failures
+        print(f"Failed to send admin notification email: {str(e)}")
