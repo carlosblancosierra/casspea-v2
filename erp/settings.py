@@ -508,3 +508,6 @@ Q_CLUSTER = {
     'label': 'CassPea Q',
     'orm': 'default',
 }
+
+
+SHIPPING_DISCOUNT_THRESHOLD = 50  # £50.00

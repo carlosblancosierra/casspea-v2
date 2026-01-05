@@ -5,6 +5,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from decimal import Decimal, ROUND_HALF_UP, ROUND_UP
 from django.contrib.contenttypes.fields import GenericRelation
+from django.conf import settings
 
 User = get_user_model()
 
@@ -85,8 +86,8 @@ class CheckoutSession(models.Model):
 
         base_shipping_cost = self.shipping_option.cents
 
-        # Apply £4.99 discount to all shipping options when cart >= £50
-        if self.cart.discounted_total >= 50:
+        # Apply £4.99 discount to all shipping options when cart >= threshold (£50.00)
+        if self.cart.discounted_total >= settings.SHIPPING_DISCOUNT_THRESHOLD:
             discount_amount = 499  # £4.99 in cents
             base_shipping_cost = max(base_shipping_cost - discount_amount, 0)
 
