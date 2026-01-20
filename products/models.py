@@ -94,6 +94,11 @@ class Product(models.Model):
     preorder_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     preorder_finish_date = models.DateField(null=True, blank=True)
 
+    pickup_only = models.BooleanField(default=False, help_text="Product can only be picked up in person")
+    pickup_from_date = models.DateField(null=True, blank=True, help_text="Date from which pickup becomes available")
+    alert_message = models.CharField(max_length=255, null=True, blank=True,
+                                     help_text="")
+
     can_pick_allergens = models.BooleanField(default=False)
 
     image = models.ImageField(
@@ -246,6 +251,15 @@ class Product(models.Model):
             return self.preorder_price
         return self.base_price
 
+    @property
+    def is_pickup_available(self):
+        """Return True if pickup is available (pickup_only is True and pickup_from_date is set and today is >= pickup_from_date)."""
+        return (
+            self.pickup_only and
+            self.pickup_from_date is not None and
+            self.pickup_from_date <= timezone.now().date()
+        )
+
 
 class ProductGalleryImage(models.Model):
     product = models.ForeignKey(
@@ -344,6 +358,7 @@ class ProductGalleryImage(models.Model):
             save=False
         )
 
+    def save(self, *args, **kwargs):
         # Process images
         if self.pk:
             original = ProductGalleryImage.objects.get(pk=self.pk)

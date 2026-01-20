@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.http import HttpResponse
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .models import Address
@@ -8,6 +8,7 @@ from checkout.models import CheckoutSession
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAdminUser
 from collections import Counter
+import csv
 
 import structlog
 
@@ -185,6 +186,12 @@ class PostalCodeStatsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        """
+        Get postal code statistics for all paid orders.
+
+        Query parameters:
+        - format: 'csv' to download as CSV file, otherwise returns JSON
+        """
         if not request.user.is_superuser:
             return Response({'detail': 'Not authorized.'}, status=403)
 
@@ -199,6 +206,21 @@ class PostalCodeStatsView(APIView):
             if order.shipping_address and order.shipping_address.postcode:
                 postcodes.append(order.shipping_address.postcode)
         postcode_counts = Counter(postcodes)
-        # Return as a list of dicts for easier frontend use
-        result = [{"postcode": k, "count": v} for k, v in postcode_counts.items()]
-        return Response(result)
+
+        # Check if CSV format is requested
+        if request.query_params.get('format') == 'csv':
+            # Create CSV response
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="postal_code_stats.csv"'
+
+            writer = csv.writer(response)
+            writer.writerow(['Postcode', 'Count'])  # Header row
+
+            for postcode, count in sorted(postcode_counts.items()):
+                writer.writerow([postcode, count])
+
+            return response
+        else:
+            # Return as a list of dicts for easier frontend use
+            result = [{"postcode": k, "count": v} for k, v in postcode_counts.items()]
+            return Response(result)

@@ -39,6 +39,7 @@ class ProductSerializer(serializers.ModelSerializer):
     category = ProductCategoryShallowSerializer()
     gallery_images = ProductGalleryImageSerializer(many=True, read_only=True)
     is_preorder_active = serializers.BooleanField(read_only=True)
+    is_pickup_available = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Product
@@ -68,6 +69,10 @@ class ProductSerializer(serializers.ModelSerializer):
             'preorder_finish_date',
             'is_preorder_active',
             'current_price',
+            'pickup_only',
+            'pickup_from_date',
+            'alert_message',
+            'is_pickup_available',
             'can_pick_allergens',
             'created',
             'updated'
