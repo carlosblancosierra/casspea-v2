@@ -76,6 +76,12 @@ class CartItem(models.Model):
     cart = models.ForeignKey(Cart, related_name='items', on_delete=models.CASCADE, null=True, blank=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
+    selected_custom_option_key = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Identifier of the selected custom option from the product"
+    )
 
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)

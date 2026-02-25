@@ -63,6 +63,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     base_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discounted_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     savings = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    selected_custom_option_key = serializers.CharField(read_only=True)
 
     class Meta:
         model = CartItem
@@ -70,6 +71,7 @@ class CartItemSerializer(serializers.ModelSerializer):
             'id',
             'quantity',
             'product',
+            'selected_custom_option_key',
             'box_customization',
             'pack_customization',
             'base_price',
@@ -155,18 +157,38 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
     box_customization = CartItemBoxCustomizationCreateSerializer(required=False)
     pack_customization = CartItemPackCustomizationCreateSerializer(required=False)
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    selected_custom_option_key = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True
+    )
 
     class Meta:
         model = CartItem
-        fields = ['product', 'quantity', 'box_customization', 'pack_customization']
+        fields = ['product', 'quantity', 'selected_custom_option_key', 'box_customization', 'pack_customization']
 
     def validate(self, data):
         product = data['product']
         box_customization = data.get('box_customization')
         pack_customization = data.get('pack_customization')
+        selected_custom_option_key = data.get('selected_custom_option_key') or None
 
         if box_customization and pack_customization:
             raise serializers.ValidationError("Cannot provide both box_customization and pack_customization.")
+
+        # Validate selected_custom_option_key against product.custom_options (if provided)
+        if selected_custom_option_key is not None:
+            options = product.custom_options or []
+            # We assume each option is a dict with a unique "key"
+            valid_keys = {
+                opt.get('key')
+                for opt in options
+                if isinstance(opt, dict) and 'key' in opt
+            }
+            if not valid_keys or selected_custom_option_key not in valid_keys:
+                raise serializers.ValidationError({
+                    'selected_custom_option_key': "Selected option is not valid for this product."
+                })
 
         if box_customization:
             if box_customization.get('selection_type') == 'PICK_AND_MIX':

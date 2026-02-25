@@ -74,6 +74,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'alert_message',
             'is_pickup_available',
             'can_pick_allergens',
+            'custom_options',
             'created',
             'updated'
         ]

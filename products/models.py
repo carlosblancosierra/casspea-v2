@@ -101,6 +101,12 @@ class Product(models.Model):
 
     can_pick_allergens = models.BooleanField(default=False)
 
+    custom_options = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Flexible list of custom options for this product"
+    )
+
     image = models.ImageField(
         upload_to='flavours',
         storage=s3_storage,
