@@ -110,7 +110,7 @@ class CartItemPackCustomizationAdmin(admin.ModelAdmin):
 
 
 class CartItemAdmin(admin.ModelAdmin):
-    list_display = ['id', 'cart', 'product', 'quantity', 'created', 'updated']
+    list_display = ['id', 'cart', 'product', 'quantity', 'selected_custom_option_key', 'created', 'updated']
     list_filter = ['created', 'updated']
     search_fields = ['cart__session_id', 'product__name', 'id']
     readonly_fields = ['created', 'updated']
@@ -119,7 +119,7 @@ class CartItemAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Cart Item Information', {
-            'fields': ('cart', 'product', 'quantity')
+            'fields': ('cart', 'product', 'quantity', 'selected_custom_option_key')
         }),
         ('Timestamps', {
             'fields': ('created', 'updated'),
