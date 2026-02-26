@@ -186,7 +186,15 @@
                             <div style="margin-bottom: 8px;">
                                 <strong>{{ item.quantity }}x {{ item.product.name }}</strong>
                             </div>
-
+                            {% if item.selected_custom_option_key and item.product.custom_options %}
+                                {% for opt in item.product.custom_options %}
+                                    {% if opt.key == item.selected_custom_option_key %}
+                                        <div style="margin-bottom: 8px; font-size: 12px; color: #4b5563;">
+                                            <span style="background-color: #eef2ff; padding: 4px 8px; border-radius: 4px; border: 1px solid #c7d2fe;">Option: {{ opt.label }}</span>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endif %}
                             <!-- Selection Type Badge -->
                             {% if item.box_customization %}
                             <div style="margin-bottom: 8px;">
