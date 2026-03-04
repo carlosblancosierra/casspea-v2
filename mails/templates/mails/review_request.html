@@ -9,22 +9,66 @@
 
 {% block content %}
     <div style="text-align: center;">
+        <h2 style="color: #ff62b4; font-size: 24px; margin-bottom: 24px;">Hi {{ order.shipping_address.first_name|default:'there' }}!</h2>
+        
+        <p style="color: #2b2c2e; font-size: 18px; line-height: 1.6; margin-bottom: 24px;">
+            Thank you so much for choosing CassPea Chocolates! As a small family-owned business, it means the world to us that you decided to try our creations.
+        </p>
+
+        <p style="color: #2b2c2e; font-size: 18px; line-height: 1.6; margin-bottom: 32px;">
+            We hope you enjoyed your 
+            {% for item in order.checkout_session.cart.items.all %}
+                {% if forloop.first %}
+                    <strong>{{ item.product.name }}</strong>
+                {% elif forloop.last %}
+                    and <strong>{{ item.product.name }}</strong>
+                {% else %}, 
+                    <strong>{{ item.product.name }}</strong>
+                {% endif %}
+            {% endfor %}!
+            
+            We create each chocolate with a lot of love and care, and hearing from you helps us keep making someone's day a little sweeter.
+        </p>
+
         <a href="https://uk.trustpilot.com/review/www.casspea.co.uk?utm_medium=email&utm_source=RequestReview" target="_blank">
             <img src="https://mcusercontent.com/0e6dd8383ed264ebc83f2eecf/images/1cd725ce-2c4b-7750-f0ae-d30d275114aa.jpg" alt="Leave a Trustpilot Review" style="width:100%; max-width:660px; border-radius:8px; margin-bottom: 24px;"/>
         </a>
-        <p style="color: #2b2c2e; font-size: 20px; line-height: 1.5; margin-bottom: 24px;">
-            At CassPea, we’re passionate about crafting the finest artisan chocolates. If you’ve enjoyed your experience with us, we’d be grateful if you could share your thoughts on Trustpilot. Your feedback helps us grow and keeps the chocolate flowing!
+
+        <div style="margin-bottom: 32px; text-align: left; background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
+            <p style="color: #555; font-size: 16px; margin-bottom: 16px; text-align: center;">Here is a reminder of what you ordered:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+                {% for item in order.checkout_session.cart.items.all %}
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px; width: 60px;">
+                        {% if item.product.thumbnail %}
+                            <img src="{{ item.product.thumbnail.url }}" alt="{{ item.product.name }}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;">
+                        {% else %}
+                             <div style="width: 50px; height: 50px; background-color: #eee; border-radius: 4px;"></div>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 10px; color: #333; font-weight: 500;">
+                        {{ item.product.name }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+        
+        <p style="color: #2b2c2e; font-size: 18px; line-height: 1.6; margin-bottom: 24px;">
+            Could you take a moment to leave us a review? It really helps our small business grow!
         </p>
-        <a href="https://uk.trustpilot.com/review/www.casspea.co.uk?utm_medium=email&utm_source=RequestReview" target="_blank" style="background-color:#ff1ab1; color:#fff; border-radius:50px; padding:16px 28px; font-size:18px; font-family:'DM Sans', 'Inter', sans-serif; text-decoration:none; display:inline-block; margin-bottom: 32px; letter-spacing: 1px;">Leave a Review</a>
+
+        <a href="https://uk.trustpilot.com/review/www.casspea.co.uk?utm_medium=email&utm_source=RequestReview" target="_blank" style="background-color:#ff1ab1; color:#fff; border-radius:50px; padding:16px 28px; font-size:18px; font-family:'DM Sans', 'Inter', sans-serif; text-decoration:none; display:inline-block; margin-bottom: 32px; letter-spacing: 1px;">Review Your Experience</a>
+
         <div style="margin: 32px 0;">
-            <a href="https://mcusercontent.com/0e6dd8383ed264ebc83f2eecf/images/7888b5fb-69d2-6355-ab27-49b413051e93.png" target="_blank">
+             <a href="https://mcusercontent.com/0e6dd8383ed264ebc83f2eecf/images/7888b5fb-69d2-6355-ab27-49b413051e93.png" target="_blank">
                 <img src="https://mcusercontent.com/0e6dd8383ed264ebc83f2eecf/images/7888b5fb-69d2-6355-ab27-49b413051e93.png" alt="Trustpilot Stars" style="width: 230px; max-width: 100%; margin: 0 auto; display: block;"/>
             </a>
         </div>
         <a href="https://uk.trustpilot.com/review/www.casspea.co.uk?utm_medium=email&utm_source=RequestReview" target="_blank">
             <img src="https://mcusercontent.com/0e6dd8383ed264ebc83f2eecf/images/21147d62-e2ee-ee76-f8dd-ecae560c023d.jpeg" alt="CassPea Chocolates" style="width:100%; max-width:660px; border-radius:8px; margin-bottom: 24px;"/>
         </a>
-        <h2 style="color: #ff62b4; font-size: 30px; margin-top: 32px;">Thank you very much</h2>
+        <h2 style="color: #ff62b4; font-size: 30px; margin-top: 32px;">Thank you so much!</h2>
         <div style="margin-top: 32px;">
             <a href="https://www.instagram.com/casspea_/" target="_blank" style="margin: 0 8px;">
                 <img src="https://cdn-images.mailchimp.com/icons/social-block-v3/block-icons-v3/instagram-icon-light-40.png" alt="Instagram" width="24" height="24" style="vertical-align: middle;"/>
