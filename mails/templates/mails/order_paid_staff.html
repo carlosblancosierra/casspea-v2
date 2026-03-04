@@ -230,7 +230,7 @@
                             </div>
 
                             <!-- Flavor Selections -->
-                            {% if item.box_customization.selection_type == 'PICK_AND_MIX' and item.box_customization.flavor_selections.exists %}
+                            {% if item.box_customization.selection_type == 'PICK_AND_MIX' %}
                             <div style="
                                 margin-top: 8px;
                                 font-size: 12px;
@@ -241,6 +241,74 @@
                                     {{ selection.quantity }}x {{ selection.flavor.name }}
                                 </div>
                                 {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% endif %}
+
+                            {% if item.pack_customization %}
+                            <div style="margin-bottom: 8px;">
+                                <span style="
+                                    background-color: #f3f4f6;
+                                    padding: 4px 8px;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                    color: #4b5563;
+                                    border: 1px solid #e5e7eb;
+                                ">
+                                    {% if item.pack_customization.selection_type == 'PICK_AND_MIX' %}
+                                        Pick & Mix
+                                    {% elif item.pack_customization.selection_type == 'RANDOM' %}
+                                        Surprise Me
+                                    {% endif %}
+                                </span>
+
+                                <!-- Allergen Badges -->
+                                {% for allergen in item.pack_customization.allergens.all %}
+                                <span style="
+                                    background-color: #f3f4f6;
+                                    padding: 4px 8px;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                    color: #4b5563;
+                                    border: 1px solid #e5e7eb;
+                                    margin-left: 4px;
+                                ">
+                                    {{ allergen.name }} Free
+                                </span>
+                                {% endfor %}
+                            </div>
+
+                            <!-- Flavor Selections for packs (Indulgence, etc.) -->
+                            {% if item.pack_customization.selection_type == 'PICK_AND_MIX' %}
+                            <div style="
+                                margin-top: 8px;
+                                font-size: 12px;
+                                color: #6b7280;
+                            ">
+                                {% for selection in item.pack_customization.flavor_selections_pack.all %}
+                                <div style="margin-bottom: 4px;">
+                                    {{ selection.quantity }}x {{ selection.flavor.name }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <!-- Pack add-ons: hot chocolate, bark, gift card -->
+                            {% if item.pack_customization.chocolate_bark or item.pack_customization.hot_chocolate or item.pack_customization.gift_card %}
+                            <div style="
+                                margin-top: 8px;
+                                font-size: 12px;
+                                color: #4f46e5;
+                            ">
+                                {% if item.pack_customization.chocolate_bark %}
+                                <div>+ Chocolate Bark: {{ item.pack_customization.chocolate_bark.name }}</div>
+                                {% endif %}
+                                {% if item.pack_customization.hot_chocolate %}
+                                <div>+ Hot Chocolate: {{ item.pack_customization.hot_chocolate.name }}</div>
+                                {% endif %}
+                                {% if item.pack_customization.gift_card %}
+                                <div>+ Gift Card: {{ item.pack_customization.gift_card.name }}</div>
+                                {% endif %}
                             </div>
                             {% endif %}
                             {% endif %}
