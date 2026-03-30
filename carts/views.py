@@ -26,6 +26,9 @@ class CartView(APIView):
     def get(self, request):
         """Get or create a session cart"""
         cart = self.get_cart(request)
+        # Remove any items whose product is now sold out
+        cart.items.filter(product__sold_out=True).delete()
+        cart.refresh_from_db()
         serializer = CartSerializer(cart)
         return Response(serializer.data)
 
@@ -155,6 +158,10 @@ class CartItemViewSet(viewsets.ViewSet):
         if quantity < 1:
             raise serializers.ValidationError({
                 "quantity": "Quantity must be greater than 0"
+            })
+        if product.sold_out:
+            raise serializers.ValidationError({
+                "product": "This product is sold out"
             })
         return product, quantity
 

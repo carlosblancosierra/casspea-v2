@@ -9,8 +9,8 @@ def prepare_stripe_payload(checkout_session, embedded=False):
     con ui_mode='embedded' y return_url si embedded=True,
     o success_url/cancel_url en otro caso.
     """
-    # Line items
-    items = checkout_session.cart.items.select_related('product').all()
+    # Line items (exclude sold out products)
+    items = checkout_session.cart.items.select_related('product').filter(product__sold_out=False)
     line_items = []
     for item in items:
         line_items.append({
