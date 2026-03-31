@@ -8,6 +8,8 @@ from django.utils import timezone
 from mails.models import EmailType, EmailSent
 from orders.models import Order, OrderStatusHistory
 from checkout.models import CheckoutSession
+from carts.models import CartItem
+from products.models import Product
 from django.core.mail import send_mail
 from erp.settings import STAFF_EMAILS, ADMINS
 import structlog
@@ -78,7 +80,69 @@ def stripe_webhook(request):
                     checkout_session_id=checkout_session_id, error=str(csde))
                 return HttpResponse(status=404)
 
-            # Step 2: Create Order FIRST (before marking as paid so retries can still create it)
+            # Step 2: Reconcile cart items with what Stripe actually charged
+            try:
+                stripe_line_items = stripe.checkout.Session.list_line_items(session.id, limit=100)
+                stripe_items = {
+                    item.price.id: item.quantity
+                    for item in stripe_line_items.auto_paging_iter()
+                }
+
+                cart = checkout_session.cart
+                cart_items_by_price = {
+                    ci.product.stripe_price_id: ci
+                    for ci in cart.items.select_related('product').all()
+                }
+
+                needs_reconciliation = (
+                    set(stripe_items.keys()) != set(cart_items_by_price.keys())
+                    or any(
+                        stripe_items[pid] != cart_items_by_price[pid].quantity
+                        for pid in stripe_items if pid in cart_items_by_price
+                    )
+                )
+
+                if needs_reconciliation:
+                    logger.info("Cart/Stripe mismatch — reconciling",
+                        stripe_prices=list(stripe_items.keys()),
+                        cart_prices=list(cart_items_by_price.keys()),
+                    )
+
+                    # Remove items present in cart but not charged by Stripe
+                    for price_id, cart_item in list(cart_items_by_price.items()):
+                        if price_id not in stripe_items:
+                            cart_item.delete()
+                            logger.info("Removed cart item absent from Stripe payment",
+                                price_id=price_id, cart_item_id=cart_item.id)
+                            del cart_items_by_price[price_id]
+
+                    # Add or update items to match Stripe quantities
+                    for price_id, quantity in stripe_items.items():
+                        if price_id in cart_items_by_price:
+                            cart_item = cart_items_by_price[price_id]
+                            if cart_item.quantity != quantity:
+                                cart_item.quantity = quantity
+                                cart_item.save()
+                                logger.info("Updated cart item quantity to match Stripe",
+                                    price_id=price_id, quantity=quantity)
+                        else:
+                            try:
+                                product = Product.objects.get(stripe_price_id=price_id)
+                                CartItem.objects.create(cart=cart, product=product, quantity=quantity)
+                                logger.info("Added cart item from Stripe payment",
+                                    price_id=price_id, quantity=quantity)
+                            except Product.DoesNotExist:
+                                logger.warning("No product found for Stripe price_id — skipping",
+                                    price_id=price_id)
+                else:
+                    logger.info("Cart matches Stripe line items — no reconciliation needed")
+
+            except Exception as reconcile_exc:
+                logger.exception("Failed to reconcile cart with Stripe line items",
+                    error=str(reconcile_exc))
+                # Non-fatal: continue with order creation using existing cart state
+
+            # Step 3: Create Order FIRST (before marking as paid so retries can still create it)
             try:
                 order = Order.objects.get(checkout_session=checkout_session)
                 logger.info("Order already exists", order_id=order.order_id)
@@ -98,21 +162,21 @@ def stripe_webhook(request):
                 )
                 logger.info("OrderStatusHistory logged", order_id=order.order_id)
 
-            # Step 3: Mark CheckoutSession as paid (after order exists)
+            # Step 4: Mark CheckoutSession as paid (after order exists)
             checkout_session.payment_status = CheckoutSession.Status.PAID
             checkout_session.stripe_payment_intent = session.payment_intent
             checkout_session.stripe_session_id = session.id
             checkout_session.save()
             logger.info("CheckoutSession updated", checkout_session_id=checkout_session_id)
 
-            # Step 4: Mark cart as inactive if still active
+            # Step 5: Mark cart as inactive if still active
             cart = checkout_session.cart
             if cart.active:
                 cart.active = False
                 cart.save()
                 logger.info("Cart marked as inactive", cart_id=cart.id)
 
-            # Step 5: Send confirmation email
+            # Step 6: Send confirmation email
             # Get the content type for Order
             content_type = ContentType.objects.get_for_model(order)
 
