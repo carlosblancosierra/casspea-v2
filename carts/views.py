@@ -26,9 +26,12 @@ class CartView(APIView):
     def get(self, request):
         """Get or create a session cart"""
         cart = self.get_cart(request)
-        # Remove any items whose product is now sold out
-        cart.items.filter(product__sold_out=True).delete()
-        cart.refresh_from_db()
+        # Only remove sold-out items from unpaid carts.
+        # Paid carts are immutable — their items represent what was purchased.
+        cart_is_paid = cart.checkoutsession_set.filter(payment_status='paid').exists()
+        if not cart_is_paid:
+            cart.items.filter(product__sold_out=True).delete()
+            cart.refresh_from_db()
         serializer = CartSerializer(cart)
         return Response(serializer.data)
 
