@@ -113,85 +113,84 @@ def stripe_webhook(request):
                 logger.info("Cart marked as inactive", cart_id=cart.id)
 
             # Step 5: Send confirmation email
-            try:
-                # Get the content type for Order
-                content_type = ContentType.objects.get_for_model(order)
+            # Get the content type for Order
+            content_type = ContentType.objects.get_for_model(order)
 
-                # Check if email was already sent - Modified query
-                if not EmailSent.objects.filter(
-                    content_type=content_type,
-                    object_id=order.id,  # Use the actual ID
-                    email_type__name=EmailType.ORDER_PAID,
-                    status=EmailSent.SENT
-                ).exists():
-                    email_sent = None
-                    try:
-                        email_type = EmailType.objects.get(name=EmailType.ORDER_PAID)
+            # Check if email was already sent - Modified query
+            if not EmailSent.objects.filter(
+                content_type=content_type,
+                object_id=order.id,  # Use the actual ID
+                email_type__name=EmailType.ORDER_PAID,
+                status=EmailSent.SENT
+            ).exists():
+                email_sent = None
+                try:
+                    email_type = EmailType.objects.get(name=EmailType.ORDER_PAID)
 
-                        # Create EmailSent entry first
-                        email_sent = EmailSent.objects.create(
-                            email_type=email_type,
-                            content_type=content_type,
-                            object_id=order.id,
-                            status=EmailSent.PENDING,
-                            sent=timezone.now()
+                    # Create EmailSent entry first
+                    email_sent = EmailSent.objects.create(
+                        email_type=email_type,
+                        content_type=content_type,
+                        object_id=order.id,
+                        status=EmailSent.PENDING,
+                        sent=timezone.now()
+                    )
+
+                    # Render email template
+                    html_content = render_to_string('mails/order_paid.html', {
+                        'order': order,
+                        'current_year': timezone.now().year,
+                    })
+
+                    # Get recipient email
+                    recipient_email = checkout_session.email or (
+                        checkout_session.cart.user.email if checkout_session.cart.user else None
+                    )
+
+                    if recipient_email:
+                        send_mail(
+                            subject='Your CassPea Order Confirmation',
+                            message='Thank you for your order!',
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[recipient_email],
+                            html_message=html_content,
+                            fail_silently=False,
                         )
 
-                        # Render email template
-                        html_content = render_to_string('mails/order_paid.html', {
+                        # Update email status to SENT only after successful sending
+                        email_sent.status = EmailSent.SENT
+                        email_sent.save()
+
+                        logger.info("Order confirmation email sent",
+                            recipient_email=recipient_email,
+                            order_id=order.order_id
+                        )
+
+                        # Send email to staff
+                        staff_html_content = render_to_string('mails/order_paid_staff.html', {
                             'order': order,
                             'current_year': timezone.now().year,
                         })
 
-                        # Get recipient email
-                        recipient_email = checkout_session.email or (
-                            checkout_session.cart.user.email if checkout_session.cart.user else None
+                        send_mail(
+                            subject='New Order Confirmation',
+                            message='A new order has been placed',
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=STAFF_EMAILS,
+                            html_message=staff_html_content,
+                            fail_silently=False,
                         )
+                    else:
+                        logger.warning("No recipient email found for sending order confirmation", order_id=order.order_id)
 
-                        if recipient_email:
-                            send_mail(
-                                subject='Your CassPea Order Confirmation',
-                                message='Thank you for your order!',
-                                from_email=settings.DEFAULT_FROM_EMAIL,
-                                recipient_list=[recipient_email],
-                                html_message=html_content,
-                                fail_silently=False,
-                            )
-
-                            # Update email status to SENT only after successful sending
-                            email_sent.status = EmailSent.SENT
-                            email_sent.save()
-
-                            logger.info("Order confirmation email sent",
-                                recipient_email=recipient_email,
-                                order_id=order.order_id
-                            )
-
-                            # Send email to staff
-                            staff_html_content = render_to_string('mails/order_paid_staff.html', {
-                                'order': order,
-                                'current_year': timezone.now().year,
-                            })
-
-                            send_mail(
-                                subject='New Order Confirmation',
-                                message='A new order has been placed',
-                                from_email=settings.DEFAULT_FROM_EMAIL,
-                                recipient_list=STAFF_EMAILS,
-                                html_message=staff_html_content,
-                                fail_silently=False,
-                            )
-                        else:
-                            logger.warning("No recipient email found for sending order confirmation", order_id=order.order_id)
-
-                    except Exception as email_exc:
-                        logger.exception("Failed to send order confirmation email",
-                            error=str(email_exc),
-                        )
-                        if email_sent is not None:
-                            email_sent.status = EmailSent.FAILED
-                            email_sent.error_message = str(email_exc)
-                            email_sent.save()
+                except Exception as email_exc:
+                    logger.exception("Failed to send order confirmation email",
+                        error=str(email_exc),
+                    )
+                    if email_sent is not None:
+                        email_sent.status = EmailSent.FAILED
+                        email_sent.error_message = str(email_exc)
+                        email_sent.save()
 
         except Exception as e:
             logger.exception("Unexpected error during webhook processing", error=str(e))
