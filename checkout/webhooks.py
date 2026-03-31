@@ -62,7 +62,7 @@ def stripe_webhook(request):
         order = None
 
         try:
-            # Step 1: Retrieve and update CheckoutSession
+            # Step 1: Retrieve CheckoutSession
             checkout_session_id = session['metadata'].get('checkout_session_id')
             try:
                 checkout_session = CheckoutSession.objects.get(id=checkout_session_id)
@@ -73,17 +73,12 @@ def stripe_webhook(request):
                         checkout_session_id=checkout_session_id)
                     return HttpResponse(status=200)
 
-                checkout_session.payment_status = CheckoutSession.Status.PAID
-                checkout_session.stripe_payment_intent = session.get('payment_intent')
-                checkout_session.stripe_session_id = session.get('id')
-                checkout_session.save()
-                logger.info("CheckoutSession updated", checkout_session_id=checkout_session_id)
             except CheckoutSession.DoesNotExist as csde:
                 logger.error("CheckoutSession does not exist",
                     checkout_session_id=checkout_session_id, error=str(csde))
                 return HttpResponse(status=404)
 
-            # Step 2: Create Order if it doesn't exist
+            # Step 2: Create Order FIRST (before marking as paid so retries can still create it)
             try:
                 order = Order.objects.get(checkout_session=checkout_session)
                 logger.info("Order already exists", order_id=order.order_id)
@@ -103,14 +98,21 @@ def stripe_webhook(request):
                 )
                 logger.info("OrderStatusHistory logged", order_id=order.order_id)
 
-            # Step 3: Mark cart as inactive if still active
+            # Step 3: Mark CheckoutSession as paid (after order exists)
+            checkout_session.payment_status = CheckoutSession.Status.PAID
+            checkout_session.stripe_payment_intent = session.get('payment_intent')
+            checkout_session.stripe_session_id = session.get('id')
+            checkout_session.save()
+            logger.info("CheckoutSession updated", checkout_session_id=checkout_session_id)
+
+            # Step 4: Mark cart as inactive if still active
             cart = checkout_session.cart
             if cart.active:
                 cart.active = False
                 cart.save()
                 logger.info("Cart marked as inactive", cart_id=cart.id)
 
-            # Step 4: Send confirmation email
+            # Step 5: Send confirmation email
             try:
                 # Get the content type for Order
                 content_type = ContentType.objects.get_for_model(order)

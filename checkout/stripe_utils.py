@@ -19,6 +19,9 @@ def prepare_stripe_payload(checkout_session, embedded=False):
             "adjustable_quantity": {"enabled": False},
         })
 
+    if not line_items:
+        raise ValueError("Cart has no available items to checkout")
+
     # Descuentos
     discounts = []
     if checkout_session.cart.discount and checkout_session.cart.discount.status[0]:
