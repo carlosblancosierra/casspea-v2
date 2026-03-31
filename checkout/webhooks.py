@@ -40,8 +40,8 @@ def stripe_webhook(request):
             payload, sig_header, endpoint_secret
         )
         logger.info("Stripe webhook constructed successfully",
-            event_id=event.get('id'),
-            event_type=event.get('type')
+            event_id=event.id,
+            event_type=event.type
         )
     except ValueError as e:
         logger.error("Invalid payload", error=str(e))
@@ -57,13 +57,13 @@ def stripe_webhook(request):
 
     if event and event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        logger.info("Processing checkout.session.completed event", session_id=session.get('id'))
+        logger.info("Processing checkout.session.completed event", session_id=session.id)
         checkout_session = None
         order = None
 
         try:
             # Step 1: Retrieve CheckoutSession
-            checkout_session_id = session['metadata'].get('checkout_session_id')
+            checkout_session_id = session.metadata.get('checkout_session_id')
             try:
                 checkout_session = CheckoutSession.objects.get(id=checkout_session_id)
 
@@ -100,8 +100,8 @@ def stripe_webhook(request):
 
             # Step 3: Mark CheckoutSession as paid (after order exists)
             checkout_session.payment_status = CheckoutSession.Status.PAID
-            checkout_session.stripe_payment_intent = session.get('payment_intent')
-            checkout_session.stripe_session_id = session.get('id')
+            checkout_session.stripe_payment_intent = session.payment_intent
+            checkout_session.stripe_session_id = session.id
             checkout_session.save()
             logger.info("CheckoutSession updated", checkout_session_id=checkout_session_id)
 
@@ -124,6 +124,7 @@ def stripe_webhook(request):
                     email_type__name=EmailType.ORDER_PAID,
                     status=EmailSent.SENT
                 ).exists():
+                    email_sent = None
                     try:
                         email_type = EmailType.objects.get(name=EmailType.ORDER_PAID)
 
@@ -167,7 +168,6 @@ def stripe_webhook(request):
                             )
 
                             # Send email to staff
-
                             staff_html_content = render_to_string('mails/order_paid_staff.html', {
                                 'order': order,
                                 'current_year': timezone.now().year,
@@ -185,17 +185,13 @@ def stripe_webhook(request):
                             logger.warning("No recipient email found for sending order confirmation", order_id=order.order_id)
 
                     except Exception as email_exc:
-                        email_sent.status = EmailSent.FAILED
-                        email_sent.error_message = str(email_exc)
-                        email_sent.save()
                         logger.exception("Failed to send order confirmation email",
                             error=str(email_exc),
-                            email_sent_id=email_sent.id
                         )
-
-            except EmailSent.DoesNotExist as esde:
-                logger.error("EmailSent entry does not exist", email_sent_id=esde.id)
-                return HttpResponse(status=500)
+                        if email_sent is not None:
+                            email_sent.status = EmailSent.FAILED
+                            email_sent.error_message = str(email_exc)
+                            email_sent.save()
 
         except Exception as e:
             logger.exception("Unexpected error during webhook processing", error=str(e))
@@ -204,12 +200,12 @@ def stripe_webhook(request):
     if event and event['type'] == 'payment_intent.payment_failed':
         session = event['data']['object']
         logger.info("Processing payment_intent.payment_failed event",
-            session_id=session.get('id')
+            session_id=session.id
         )
 
         try:
             # Retrieve the CheckoutSession using metadata
-            checkout_session_id = session['metadata'].get('checkout_session_id')
+            checkout_session_id = session.metadata.get('checkout_session_id')
             checkout_session = CheckoutSession.objects.get(id=checkout_session_id)
             logger.info("CheckoutSession retrieved for failed payment", checkout_session_id=checkout_session_id)
 
