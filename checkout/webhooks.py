@@ -65,7 +65,7 @@ def stripe_webhook(request):
 
         try:
             # Step 1: Retrieve CheckoutSession
-            checkout_session_id = session.metadata.get('checkout_session_id')
+            checkout_session_id = session.metadata['checkout_session_id']
             try:
                 checkout_session = CheckoutSession.objects.get(id=checkout_session_id)
 
@@ -268,7 +268,7 @@ def stripe_webhook(request):
 
         try:
             # Retrieve the CheckoutSession using metadata
-            checkout_session_id = session.metadata.get('checkout_session_id')
+            checkout_session_id = session.metadata['checkout_session_id']
             checkout_session = CheckoutSession.objects.get(id=checkout_session_id)
             logger.info("CheckoutSession retrieved for failed payment", checkout_session_id=checkout_session_id)
 
