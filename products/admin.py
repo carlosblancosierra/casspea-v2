@@ -28,6 +28,17 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ['category', 'active', 'sold_out']
     search_fields = ['name', 'description']
     inlines = [ProductGalleryImageInline]
+    actions = ['mark_not_sold_out', 'mark_sold_out']
+
+    def mark_not_sold_out(self, request, queryset):
+        updated = queryset.update(sold_out=False)
+        self.message_user(request, f'{updated} product(s) marked as not sold out.')
+    mark_not_sold_out.short_description = 'Mark selected products as not sold out'
+
+    def mark_sold_out(self, request, queryset):
+        updated = queryset.update(sold_out=True)
+        self.message_user(request, f'{updated} product(s) marked as sold out.')
+    mark_sold_out.short_description = 'Mark selected products as sold out'
 
     def image_preview(self, obj):
         if obj.image:
