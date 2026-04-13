@@ -26,6 +26,7 @@ from leads.urls import urlpatterns as leads_urls
 from users.urls import urlpatterns as user_urls
 from orders.urls import urlpatterns as orders_urls
 from royalmail.urls import urlpatterns as royalmail_urls
+from mails.urls import urlpatterns as mails_urls
 from personalized.urls import urlpatterns as personalized_urls
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -59,6 +60,7 @@ urlpatterns = [
     path('api/users/', include(user_urls)),
     path('api/orders/', include(orders_urls)),
     path('api/royalmail/', include(royalmail_urls)),
+    path('api/mails/', include(mails_urls)),
     path('api/personalized/', include(personalized_urls)),
 ]
 

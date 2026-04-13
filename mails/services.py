@@ -145,7 +145,7 @@ class OrderShippingMailProcessor:
 
 class ReviewRequestMailProcessor:
     def get_eligible_orders(self):
-        start_date = date(2025, 7, 1)
+        start_date = date(2026, 1, 1)
         cutoff = timezone.now() - timedelta(days=7)
         review_email_type, _ = EmailType.objects.get_or_create(
             name=EmailType.REVIEW_REQUEST,
@@ -206,6 +206,24 @@ class ReviewRequestMailProcessor:
             self.log_email_sent(order, email_type, is_test=test)
             sent_count += 1
         return sent_count
+
+    def send_review_requests_dry_run(self):
+        orders, _ = self.get_eligible_orders()
+        for order in orders:
+            created = order.created.strftime('%Y-%m-%d') if order.created else 'Unknown'
+            print(f"Order: {order.order_id}, Email: {order.email}, Created: {created}")
+        return orders.count()
+
+    def send_review_requests_preview(self, recipient):
+        """Send review request emails to a single recipient for preview (no logging)."""
+        orders, email_type = self.get_eligible_orders()
+        sent_count = 0
+        for order in orders:
+            email = self.build_email(order, email_type, test=False)
+            email.to = [recipient]
+            email.send()
+            sent_count += 1
+        return sent_count, orders.count()
 
 
 def send_error_notification_to_admins(

@@ -6,11 +6,11 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
 from orders.models import Order
 from mails.models import EmailSent, EmailType
-from mails.services import OrderShippingMailProcessor
+from mails.services import OrderShippingMailProcessor, ReviewRequestMailProcessor
 from users.authentication import CustomJWTAuthentication
 
 
@@ -83,5 +83,28 @@ class OrderShippingEmailView(APIView):
 
         return Response(
             {"message": "Shipping email sent successfully"},
+            status=status.HTTP_200_OK
+        )
+
+
+class ReviewRequestPreviewView(APIView):
+    """Send all eligible review request emails to a test address (no logging)."""
+    permission_classes = [IsAdminUser]
+    authentication_classes = [CustomJWTAuthentication]
+
+    def post(self, request):
+        recipient = "carlosblancosierra@gmail.com"
+        try:
+            processor = ReviewRequestMailProcessor()
+            sent_count, total_count = processor.send_review_requests_preview(recipient)
+        except Exception as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        return Response(
+            {
+                "message": f"Sent {sent_count} of {total_count} eligible review request(s) to {recipient}.",
+            },
             status=status.HTTP_200_OK
         )
