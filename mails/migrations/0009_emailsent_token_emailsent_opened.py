@@ -11,12 +11,19 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="emailsent",
-            name="token",
-            field=models.UUIDField(default=uuid.uuid4, unique=True, db_index=True),
-        ),
-        migrations.AddField(
-            model_name="emailsent",
             name="opened",
             field=models.DateTimeField(blank=True, null=True),
+        ),
+        # Add token without unique constraint first so existing rows get defaults
+        migrations.AddField(
+            model_name="emailsent",
+            name="token",
+            field=models.UUIDField(default=uuid.uuid4, unique=False),
+        ),
+        # Then apply the unique constraint
+        migrations.AlterField(
+            model_name="emailsent",
+            name="token",
+            field=models.UUIDField(default=uuid.uuid4, unique=True, db_index=True),
         ),
     ]
