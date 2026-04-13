@@ -172,11 +172,12 @@ class ReviewRequestMailProcessor:
         )
         return orders, review_email_type
 
-    def build_email(self, order, email_type, test=False):
+    def build_email(self, order, email_type, tracking_token=None, recipient=None):
         subject = "How was your CassPea order? We'd love your review!"
-        recipient = order.email if not test else "test@test.com"
+        to = recipient or order.email
         context = {
             'order': order,
+            'tracking_token': tracking_token,
             'current_year': timezone.now().year,
         }
         message = render_to_string(email_type.template_name, context)
@@ -184,32 +185,33 @@ class ReviewRequestMailProcessor:
             subject=subject,
             body=message,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[recipient],
+            to=[to],
         )
         email.content_subtype = "html"
         return email
 
     def log_email_sent(self, order, email_type, is_test=False):
         order_ct = ContentType.objects.get_for_model(order.__class__)
-        EmailSent.objects.create(
+        return EmailSent.objects.create(
             email_type=email_type,
             content_type=order_ct,
             object_id=order.pk,
             is_test=is_test
         )
 
-    def send_review_requests(self, test=False):
+    def send_review_requests(self, test=False, batch_size=50):
         orders, email_type = self.get_eligible_orders()
+        total_remaining = orders.count()
         sent_count = 0
-        for order in orders:
-            email = self.build_email(order, email_type, test=test)
+        for order in orders[:batch_size]:
+            log = self.log_email_sent(order, email_type, is_test=test)
+            email = self.build_email(order, email_type, tracking_token=log.token)
             if test:
                 mail_admins(email.subject, email.body, html_message=email.body)
             else:
                 email.send()
-            self.log_email_sent(order, email_type, is_test=test)
             sent_count += 1
-        return sent_count
+        return sent_count, total_remaining
 
     def send_review_requests_dry_run(self):
         orders, _ = self.get_eligible_orders()
@@ -219,15 +221,16 @@ class ReviewRequestMailProcessor:
         return orders.count()
 
     def send_review_requests_preview(self, recipient):
-        """Send review request emails to a single recipient for preview (no logging)."""
+        """Send a single review request email to recipient for preview (logged as test)."""
         orders, email_type = self.get_eligible_orders()
-        sent_count = 0
-        for order in orders:
-            email = self.build_email(order, email_type, test=False)
-            email.to = [recipient]
-            email.send()
-            sent_count += 1
-        return sent_count, orders.count()
+        total_count = orders.count()
+        order = orders.first()
+        if not order:
+            return 0, 0
+        log = self.log_email_sent(order, email_type, is_test=True)
+        email = self.build_email(order, email_type, tracking_token=log.token, recipient=recipient)
+        email.send()
+        return 1, total_count
 
 
 def send_error_notification_to_admins(

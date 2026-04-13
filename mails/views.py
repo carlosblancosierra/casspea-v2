@@ -2,11 +2,12 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
+from django.http import HttpResponse
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.authentication import SessionAuthentication
 
 from orders.models import Order
@@ -109,3 +110,48 @@ class ReviewRequestPreviewView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class ReviewRequestSendView(APIView):
+    """Manually trigger real review request emails to all eligible orders."""
+    permission_classes = [IsAdminUser]
+    authentication_classes = [CustomJWTAuthentication, SessionAuthentication]
+
+    def post(self, request):
+        try:
+            processor = ReviewRequestMailProcessor()
+            sent_count, total_remaining = processor.send_review_requests()
+        except Exception as exc:
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        still_pending = total_remaining - sent_count
+        return Response(
+            {
+                "message": f"Sent {sent_count} review request email(s).",
+                "still_pending": still_pending,
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+# 1x1 transparent GIF
+TRACKING_PIXEL = (
+    b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00'
+    b'\xff\xff\xff\x00\x00\x00\x21\xf9\x04\x00\x00\x00\x00'
+    b'\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02'
+    b'\x44\x01\x00\x3b'
+)
+
+
+class EmailOpenTrackingView(APIView):
+    """Record email open and return a 1x1 transparent tracking pixel."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, _request, token):
+        EmailSent.objects.filter(token=token, opened__isnull=True).update(
+            opened=timezone.now()
+        )
+        return HttpResponse(TRACKING_PIXEL, content_type='image/gif')

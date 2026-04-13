@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -51,11 +52,11 @@ class EmailSent(models.Model):
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
 
+    token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
     error_message = models.TextField(blank=True, null=True)
-    sent = models.DateTimeField(
-        blank=True, null=True
-    )
+    sent = models.DateTimeField(blank=True, null=True)
+    opened = models.DateTimeField(blank=True, null=True)
     is_test = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
 

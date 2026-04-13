@@ -63,5 +63,9 @@
             <a href="mailto:hello@casspea.co.uk" style="color: #ff62b4; text-decoration: none;">hello@casspea.co.uk</a>
         </p>
 
+        {% if tracking_token %}
+        <img src="https://api.casspea.co.uk/api/mails/track/{{ tracking_token }}/open.gif" width="1" height="1" style="display:block; border:0; width:1px; height:1px;" alt="">
+        {% endif %}
+
     </div>
 {% endblock %}
