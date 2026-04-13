@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.authentication import SessionAuthentication
 
 from orders.models import Order
 from mails.models import EmailSent, EmailType
@@ -90,7 +91,7 @@ class OrderShippingEmailView(APIView):
 class ReviewRequestPreviewView(APIView):
     """Send all eligible review request emails to a test address (no logging)."""
     permission_classes = [IsAdminUser]
-    authentication_classes = [CustomJWTAuthentication]
+    authentication_classes = [CustomJWTAuthentication, SessionAuthentication]
 
     def post(self, request):
         recipient = "carlosblancosierra@gmail.com"
