@@ -5,6 +5,7 @@ from mails.models import EmailType, EmailSent
 from django.core.mail import EmailMessage, mail_admins
 from django.template.loader import render_to_string
 from django.conf import settings
+from django.db.models import Count
 from orders.models import Order
 from django.contrib.contenttypes.models import ContentType
 from datetime import date
@@ -147,20 +148,31 @@ class ReviewRequestMailProcessor:
     def get_eligible_orders(self):
         start_date = date(2026, 1, 1)
         cutoff = timezone.now() - timedelta(days=7)
+        two_days_ago = timezone.now() - timedelta(days=2)
         review_email_type, _ = EmailType.objects.get_or_create(
             name=EmailType.REVIEW_REQUEST,
             defaults={'template_name': 'mails/review_request.html'}
         )
         order_ct = ContentType.objects.get_for_model(Order)
-        # GenericForeignKey can't be traversed in reverse via ORM,
-        # so collect already-sent order IDs first then exclude them.
-        already_sent_ids = EmailSent.objects.filter(
+
+        base_qs = EmailSent.objects.filter(
             email_type=review_email_type,
             content_type=order_ct,
             is_test=False,
+        )
+        # Already received 2 emails — done
+        sent_twice_ids = (
+            base_qs
+            .values('object_id')
+            .annotate(count=Count('id'))
+            .filter(count__gte=2)
+            .values_list('object_id', flat=True)
+        )
+        # Received 1 email but less than 2 days ago — too soon
+        sent_recently_ids = base_qs.filter(
+            created__gte=two_days_ago,
         ).values_list('object_id', flat=True)
-        # Orders paid >7 days ago, after Jan 1, 2026,
-        # and not already sent a review request
+
         orders = (
             Order.objects
             .filter(
@@ -168,12 +180,16 @@ class ReviewRequestMailProcessor:
                 created__lte=cutoff,
                 checkout_session__payment_status='paid',
             )
-            .exclude(id__in=already_sent_ids)
+            .exclude(id__in=sent_twice_ids)
+            .exclude(id__in=sent_recently_ids)
         )
         return orders, review_email_type
 
-    def build_email(self, order, email_type, tracking_token=None, recipient=None):
-        subject = "How was your CassPea order? We'd love your review!"
+    def build_email(self, order, email_type, tracking_token=None, recipient=None, send_number=1):
+        if send_number == 1:
+            subject = "How was your CassPea order? We'd love your review!"
+        else:
+            subject = "Still time to leave us a review — it really helps! ⭐"
         to = recipient or order.email
         context = {
             'order': order,
@@ -201,11 +217,22 @@ class ReviewRequestMailProcessor:
 
     def send_review_requests(self, test=False, batch_size=50):
         orders, email_type = self.get_eligible_orders()
+        order_ct = ContentType.objects.get_for_model(Order)
         total_remaining = orders.count()
         sent_count = 0
         for order in orders[:batch_size]:
+            already_sent = EmailSent.objects.filter(
+                email_type=email_type,
+                content_type=order_ct,
+                object_id=order.pk,
+                is_test=False,
+            ).count()
             log = self.log_email_sent(order, email_type, is_test=test)
-            email = self.build_email(order, email_type, tracking_token=log.token)
+            email = self.build_email(
+                order, email_type,
+                tracking_token=log.token,
+                send_number=already_sent + 1,
+            )
             if test:
                 mail_admins(email.subject, email.body, html_message=email.body)
             else:
