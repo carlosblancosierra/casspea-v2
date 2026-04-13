@@ -152,7 +152,14 @@ class ReviewRequestMailProcessor:
             defaults={'template_name': 'mails/review_request.html'}
         )
         order_ct = ContentType.objects.get_for_model(Order)
-        # Orders paid >7 days ago, after July 1, 2025,
+        # GenericForeignKey can't be traversed in reverse via ORM,
+        # so collect already-sent order IDs first then exclude them.
+        already_sent_ids = EmailSent.objects.filter(
+            email_type=review_email_type,
+            content_type=order_ct,
+            is_test=False,
+        ).values_list('object_id', flat=True)
+        # Orders paid >7 days ago, after Jan 1, 2026,
         # and not already sent a review request
         orders = (
             Order.objects
@@ -161,10 +168,7 @@ class ReviewRequestMailProcessor:
                 created__lte=cutoff,
                 checkout_session__payment_status='paid',
             )
-            .exclude(
-                emailsent__email_type=review_email_type,
-                emailsent__content_type=order_ct,
-            )
+            .exclude(id__in=already_sent_ids)
         )
         return orders, review_email_type
 
