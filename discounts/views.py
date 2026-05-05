@@ -11,6 +11,7 @@ from carts.models import CartItem
 from orders.models import Order
 from users.authentication import CustomJWTAuthentication
 from .models import Discount
+from rest_framework.authentication import SessionAuthentication
 
 
 class DiscountStatsView(APIView):
@@ -19,7 +20,7 @@ class DiscountStatsView(APIView):
     Returns usage stats per discount code: carts applied, paid orders, and total revenue.
     """
     permission_classes = [permissions.IsAdminUser]
-    authentication_classes = [CustomJWTAuthentication]
+    authentication_classes = [CustomJWTAuthentication, SessionAuthentication]
 
     def get(self, request):
         discounts = (
