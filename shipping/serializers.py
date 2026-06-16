@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from decimal import Decimal
 from .models import ShippingCompany, ShippingOption
 from carts.models import Cart
 
@@ -20,18 +19,14 @@ class ShippingCompanyWithOptionsSerializer(serializers.ModelSerializer):
 
         options = obj.options.filter(active=True)
 
-        # Apply shipping discount logic for carts >= £50
-        if cart and cart.discounted_total >= 50:
-            for option in options:
-                # Apply £4.99 discount to all shipping options
-                discount_amount = Decimal('4.99')
-                original_price = option.price
-                discounted_price = max(original_price - discount_amount, Decimal('0.00'))
-
-                # Store discount info for serialization
-                option._original_price = original_price
-                option._discounted_price = discounted_price
-                option._discount_amount = discount_amount
+        # Discount (threshold + amount) lives in ShippingOption.pricing_for_cart_total
+        # so this list and the Stripe charge always agree.
+        cart_total = cart.discounted_total if cart else None
+        for option in options:
+            pricing = option.pricing_for_cart_total(cart_total)
+            option._original_price = pricing['original_price']
+            option._discounted_price = pricing['discounted_price']
+            option._discount_amount = pricing['discount_amount']
 
         return ShippingOptionSerializer(options, many=True).data
 
