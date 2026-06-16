@@ -1,0 +1,37 @@
+name: Deploy to Heroku
+
+# Every push to main on GitHub is mirrored to the Heroku git remote, which
+# triggers the container build defined in heroku.yml. Requires one repository
+# secret: HEROKU_API_KEY (Settings -> Secrets and variables -> Actions).
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+# Never let two deploys race each other.
+concurrency:
+  group: deploy-heroku
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HEROKU_APP: casspea-v2
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          # Heroku rejects shallow pushes, so we need the whole history.
+          fetch-depth: 0
+
+      - name: Push to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          if [ -z "$HEROKU_API_KEY" ]; then
+            echo "HEROKU_API_KEY secret is not set; add it under repo Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+          git push "https://heroku:${HEROKU_API_KEY}@git.heroku.com/${HEROKU_APP}.git" HEAD:refs/heads/main
