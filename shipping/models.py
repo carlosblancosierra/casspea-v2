@@ -1,5 +1,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.conf import settings
+from decimal import Decimal, ROUND_HALF_UP
 
 
 class ShippingCompany(models.Model):
@@ -57,6 +59,40 @@ class ShippingOption(models.Model):
 
     def __str__(self):
         return f"{self.company.name} - {self.name}"
+
+    def pricing_for_cart_total(self, cart_total):
+        """Single source of truth for this option's price and the cart-total discount.
+
+        Both the shipping-options API (what the customer sees) and the Stripe
+        checkout session (what the customer is charged) must call this, so the
+        displayed price and the charged price can never diverge. Everything is
+        derived from ``price`` so the pound and cent figures always agree.
+
+        ``cart_total`` is the cart's discounted total in pounds (or ``None`` when
+        there is no cart, e.g. an anonymous options listing).
+        """
+        original = Decimal(self.price)
+        threshold = Decimal(str(settings.SHIPPING_DISCOUNT_THRESHOLD))
+        discount = Decimal(str(settings.SHIPPING_DISCOUNT_AMOUNT))
+
+        if cart_total is not None and Decimal(cart_total) >= threshold:
+            discounted = max(original - discount, Decimal('0.00'))
+        else:
+            discounted = original
+
+        applied = original - discounted
+
+        def to_cents(value):
+            return int((value * 100).to_integral_value(rounding=ROUND_HALF_UP))
+
+        return {
+            'original_price': original,
+            'discounted_price': discounted,
+            'discount_amount': applied,
+            'original_cents': to_cents(original),
+            'discounted_cents': to_cents(discounted),
+            'discount_cents': to_cents(applied),
+        }
 
     class Meta:
         ordering = ['price']

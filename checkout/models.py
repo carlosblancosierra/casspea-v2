@@ -84,14 +84,10 @@ class CheckoutSession(models.Model):
         if not self.shipping_option:
             return 0
 
-        base_shipping_cost = self.shipping_option.cents
-
-        # Apply £4.99 discount to all shipping options when cart >= threshold (£50.00)
-        if self.cart.discounted_total >= settings.SHIPPING_DISCOUNT_THRESHOLD:
-            discount_amount = 499  # £4.99 in cents
-            base_shipping_cost = max(base_shipping_cost - discount_amount, 0)
-
-        return base_shipping_cost
+        # Same calculation the shipping-options API uses for display, so the
+        # amount charged always matches the discounted price the customer saw.
+        pricing = self.shipping_option.pricing_for_cart_total(self.cart.discounted_total)
+        return pricing['discounted_cents']
 
     @property
     def shipping_cost_pounds(self):
