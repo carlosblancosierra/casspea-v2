@@ -329,6 +329,13 @@ class CartUpdateSerializer(serializers.ModelSerializer):
                     discount = Discount.objects.get(code__iexact=discount_code)
                     if not discount.status[0]:
                         raise serializers.ValidationError({"discount_code": discount.status[1]})
+                    if instance.base_total < discount.min_order_value:
+                        raise serializers.ValidationError({
+                            "discount_code": (
+                                f"Add £{discount.min_order_value} or more to your "
+                                f"order to use this discount code."
+                            )
+                        })
                     instance.discount = discount
                 except Discount.DoesNotExist:
                     raise serializers.ValidationError({"discount_code": "Invalid discount code provided."})

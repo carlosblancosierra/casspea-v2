@@ -22,9 +22,11 @@ def prepare_stripe_payload(checkout_session, embedded=False):
     if not line_items:
         raise ValueError("Cart has no available items to checkout")
 
-    # Descuentos
+    # Descuentos: misma regla que los totales del carrito (estado activo +
+    # pedido mínimo), para que Stripe nunca cobre un total distinto del que
+    # vio el cliente.
     discounts = []
-    if checkout_session.cart.discount and checkout_session.cart.discount.status[0]:
+    if checkout_session.cart.is_discount_valid:
         discounts = [{"coupon": checkout_session.cart.discount.stripe_id}]
 
     # Shipping

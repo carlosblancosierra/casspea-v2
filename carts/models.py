@@ -32,7 +32,7 @@ class Cart(models.Model):
     @property
     def discounted_total(self):
         """Calculate the total after applying discount"""
-        if not self.discount or not self.discount.status[0]:
+        if not self.is_discount_valid:
             return self.base_total
 
         # For percentage discounts
@@ -42,7 +42,6 @@ class Cart(models.Model):
                 for item in self.items.all()
                 if item.product not in self.discount.exclusions.all()
             )
-            excluded_total = self.base_total - non_excluded_total
             discount_amount = (non_excluded_total * self.discount.amount) / 100
             return max(self.base_total - discount_amount, 0)
 
@@ -61,8 +60,12 @@ class Cart(models.Model):
 
     @property
     def is_discount_valid(self):
-        """Check if cart meets minimum order value for discount"""
+        """A discount only counts when it is active (not expired/scheduled)
+        and the cart meets its minimum order value. Every place that applies
+        the discount (totals, Stripe checkout) must use this single check."""
         if not self.discount:
+            return False
+        if not self.discount.status[0]:
             return False
         return self.base_total >= self.discount.min_order_value
 
@@ -94,7 +97,7 @@ class CartItem(models.Model):
     @property
     def discounted_price(self):
         """Calculate the discounted price if a discount exists"""
-        if not self.cart or not self.cart.discount:
+        if not self.cart or not self.cart.is_discount_valid:
             return self.base_price
 
         # Skip if product is in exclusions
@@ -104,6 +107,9 @@ class CartItem(models.Model):
         if self.cart.discount.discount_type == 'PERCENTAGE':
             discount_amount = (self.base_price * self.cart.discount.amount) / 100
             return max(self.base_price - discount_amount, 0)
+
+        # Fixed-amount discounts apply to the cart total, not per item.
+        return self.base_price
 
     @property
     def savings(self):
