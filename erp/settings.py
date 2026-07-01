@@ -514,5 +514,5 @@ Q_CLUSTER = {
 # option gets this amount knocked off. Both the shipping-options API (what we
 # show the customer) and the Stripe checkout session (what we charge) read these
 # same two values, so the displayed price and the charged price can never drift.
-SHIPPING_DISCOUNT_THRESHOLD = 55  # £ cart total required for the discount
+SHIPPING_DISCOUNT_THRESHOLD = 60  # £ cart total required for the discount
 SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option

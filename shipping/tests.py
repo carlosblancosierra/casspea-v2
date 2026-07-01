@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from .models import ShippingOption
 
 
-@override_settings(SHIPPING_DISCOUNT_THRESHOLD=55, SHIPPING_DISCOUNT_AMOUNT='5.00')
+@override_settings(SHIPPING_DISCOUNT_THRESHOLD=60, SHIPPING_DISCOUNT_AMOUNT='5.00')
 class ShippingOptionPricingTests(TestCase):
     """The displayed price and the charged price both come from
     ``pricing_for_cart_total``; these tests guard that they stay in sync."""
@@ -22,13 +22,13 @@ class ShippingOptionPricingTests(TestCase):
         )
 
     def test_no_discount_below_threshold(self):
-        pricing = self._option('5.99').pricing_for_cart_total(Decimal('54.99'))
+        pricing = self._option('5.99').pricing_for_cart_total(Decimal('59.99'))
         self.assertEqual(pricing['discounted_price'], Decimal('5.99'))
         self.assertEqual(pricing['discounted_cents'], 599)
         self.assertEqual(pricing['discount_amount'], Decimal('0.00'))
 
     def test_discount_applied_at_threshold(self):
-        pricing = self._option('5.99').pricing_for_cart_total(Decimal('55.00'))
+        pricing = self._option('5.99').pricing_for_cart_total(Decimal('60.00'))
         self.assertEqual(pricing['discounted_price'], Decimal('0.99'))
         self.assertEqual(pricing['discounted_cents'], 99)
         self.assertEqual(pricing['discount_amount'], Decimal('5.00'))
@@ -50,7 +50,7 @@ class ShippingOptionPricingTests(TestCase):
         # This is the regression: what we show (pounds) must equal what we
         # charge (cents) for every cart total around the threshold.
         option = self._option('5.99')
-        for total in (None, Decimal('0'), Decimal('54.99'), Decimal('55.00'), Decimal('120.00')):
+        for total in (None, Decimal('0'), Decimal('59.99'), Decimal('60.00'), Decimal('120.00')):
             pricing = option.pricing_for_cart_total(total)
             self.assertEqual(
                 pricing['discounted_cents'],
