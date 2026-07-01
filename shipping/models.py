@@ -1,7 +1,21 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
+from django.utils import timezone
 from decimal import Decimal, ROUND_HALF_UP
+
+
+def is_summer_shipping(today=None):
+    """True during the summer ice-pack season (``settings.SUMMER_SHIPPING_MONTHS``).
+
+    In summer, chocolates ship with ice packs: every shipping option costs
+    ``SUMMER_ICE_PACK_SURCHARGE`` more, and the over-threshold discount rises to
+    ``SUMMER_SHIPPING_DISCOUNT_AMOUNT`` so standard delivery is still free over
+    the threshold.
+    """
+    if today is None:
+        today = timezone.localdate()
+    return today.month in set(settings.SUMMER_SHIPPING_MONTHS)
 
 
 class ShippingCompany(models.Model):
@@ -71,9 +85,18 @@ class ShippingOption(models.Model):
         ``cart_total`` is the cart's discounted total in pounds (or ``None`` when
         there is no cart, e.g. an anonymous options listing).
         """
-        original = Decimal(self.price)
         threshold = Decimal(str(settings.SHIPPING_DISCOUNT_THRESHOLD))
-        discount = Decimal(str(settings.SHIPPING_DISCOUNT_AMOUNT))
+
+        if is_summer_shipping():
+            # Ice-pack season: every option costs £1 more, and the discount rises
+            # to £6 so standard delivery is still free over the threshold.
+            surcharge = Decimal(str(settings.SUMMER_ICE_PACK_SURCHARGE))
+            discount = Decimal(str(settings.SUMMER_SHIPPING_DISCOUNT_AMOUNT))
+        else:
+            surcharge = Decimal('0.00')
+            discount = Decimal(str(settings.SHIPPING_DISCOUNT_AMOUNT))
+
+        original = Decimal(self.price) + surcharge
 
         if cart_total is not None and Decimal(cart_total) >= threshold:
             discounted = max(original - discount, Decimal('0.00'))

@@ -513,6 +513,17 @@ Q_CLUSTER = {
 # Shipping discount: when the cart total reaches the threshold, every shipping
 # option gets this amount knocked off. Both the shipping-options API (what we
 # show the customer) and the Stripe checkout session (what we charge) read these
-# same two values, so the displayed price and the charged price can never drift.
+# values via ShippingOption.pricing_for_cart_total, so the displayed price and
+# the charged price can never drift.
 SHIPPING_DISCOUNT_THRESHOLD = 60  # £ cart total required for the discount
-SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option
+SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option (off-season)
+
+# Summer ice-pack season: chocolates ship with ice packs, which add £1 to every
+# shipping option's price. To keep standard delivery free over the threshold, the
+# over-threshold discount rises to £6 during summer (it absorbs the £1 surcharge).
+# Hardcoded here for now; move to the DB later for a runtime-editable single source
+# of truth. To switch to a manual on/off instead of a date range, set
+# SUMMER_SHIPPING_MONTHS to tuple(range(1, 13)) (always on) or () (always off).
+SUMMER_SHIPPING_MONTHS = (6, 7, 8, 9)  # months counted as summer (June–September)
+SUMMER_ICE_PACK_SURCHARGE = '1.00'  # £ added to each shipping option in summer
+SUMMER_SHIPPING_DISCOUNT_AMOUNT = '6.00'  # £ off each option over threshold in summer
