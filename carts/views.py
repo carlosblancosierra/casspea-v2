@@ -31,8 +31,7 @@ class CartView(APIView):
         cart_is_paid = cart.checkoutsession_set.filter(payment_status='paid').exists()
         if not cart_is_paid:
             cart.items.filter(product__sold_out=True).delete()
-            cart.refresh_from_db()
-        serializer = CartSerializer(cart)
+        serializer = CartSerializer(Cart.objects.for_serialization(cart.pk))
         return Response(serializer.data)
 
     @extend_schema(
@@ -138,7 +137,7 @@ class CartView(APIView):
         cart = serializer.save()
         return Response({
             "detail": "Cart updated successfully",
-            "cart": CartSerializer(cart).data
+            "cart": CartSerializer(Cart.objects.for_serialization(cart.pk)).data
         })
 
 
@@ -188,7 +187,7 @@ class CartItemViewSet(viewsets.ViewSet):
 
         cart.refresh_from_db()
         return Response(
-            CartSerializer(cart).data,
+            CartSerializer(Cart.objects.for_serialization(cart.pk)).data,
             status=status.HTTP_201_CREATED
         )
 
@@ -225,7 +224,7 @@ class CartItemViewSet(viewsets.ViewSet):
 
         cart.refresh_from_db()
         return Response(
-            CartSerializer(cart).data,
+            CartSerializer(Cart.objects.for_serialization(cart.pk)).data,
             status=status.HTTP_200_OK
         )
 
@@ -236,7 +235,7 @@ class CartItemViewSet(viewsets.ViewSet):
         cart_item.delete()
         cart.refresh_from_db()
         return Response(
-            CartSerializer(cart).data,
+            CartSerializer(Cart.objects.for_serialization(cart.pk)).data,
             status=status.HTTP_200_OK
         )
 
@@ -248,7 +247,7 @@ class CartItemViewSet(viewsets.ViewSet):
         cart_item.delete()
         cart.refresh_from_db()
         return Response(
-            CartSerializer(cart).data,
+            CartSerializer(Cart.objects.for_serialization(cart.pk)).data,
             status=status.HTTP_200_OK
         )
 
@@ -264,6 +263,6 @@ class CartItemViewSet(viewsets.ViewSet):
         serializer.save()
         cart.refresh_from_db()
         return Response(
-            CartSerializer(cart).data,
+            CartSerializer(Cart.objects.for_serialization(cart.pk)).data,
             status=status.HTTP_200_OK
         )

@@ -4,8 +4,12 @@ These guard the invariant that what the customer sees in the cart is what
 Stripe charges: shipping cost, cart discount and sold-out handling.
 """
 from decimal import Decimal
+from unittest import mock
 
+import stripe
 from django.test import TestCase, override_settings
+
+from orders.models import Order
 
 from carts.models import Cart, CartItem
 from carts.tests.test_totals import make_product
@@ -153,3 +157,125 @@ class StripePayloadTest(TestCase):
 
         payload = prepare_stripe_payload(self.session)
         self.assertEqual(payload['discounts'], [])
+
+
+class StripeWebhookTest(TestCase):
+    """The webhook is where money becomes an order: it must be idempotent,
+    create the order, mark the session paid and retire the cart."""
+
+    def setUp(self):
+        self.cart = Cart.objects.create(session_id='test-session')
+        self.box = make_product('Box of 9', '14.99')
+        CartItem.objects.create(cart=self.cart, product=self.box, quantity=2)
+        self.session = CheckoutSession.objects.create(
+            cart=self.cart, email='guest@example.com'
+        )
+
+    def _event(self):
+        """Fake checkout.session.completed event as construct_event returns."""
+        stripe_session = mock.Mock()
+        stripe_session.id = 'cs_test_123'
+        stripe_session.payment_intent = 'pi_test_123'
+        stripe_session.metadata = {'checkout_session_id': str(self.session.id)}
+
+        event = mock.MagicMock()
+        event.id = 'evt_test_123'
+        event.type = 'checkout.session.completed'
+        event.__getitem__.side_effect = lambda key: {
+            'type': 'checkout.session.completed',
+            'data': {'object': stripe_session},
+        }[key]
+        return event
+
+    def _line_items(self):
+        """Stripe line items matching the cart exactly (no reconciliation)."""
+        item = mock.Mock()
+        item.price.id = self.box.stripe_price_id
+        item.quantity = 2
+        result = mock.Mock()
+        result.auto_paging_iter.return_value = iter([item])
+        return result
+
+    def _post(self):
+        return self.client.post(
+            '/api/checkout/stripe/webhook/',
+            data=b'{}',
+            content_type='application/json',
+            HTTP_STRIPE_SIGNATURE='t=1,v1=sig',
+        )
+
+    def test_invalid_signature_returns_400(self):
+        with mock.patch(
+            'checkout.webhooks.stripe.Webhook.construct_event',
+            side_effect=stripe.error.SignatureVerificationError('bad', 'sig'),
+        ):
+            response = self._post()
+        self.assertEqual(response.status_code, 400)
+
+    def test_completed_session_creates_order_and_marks_paid(self):
+        with mock.patch(
+            'checkout.webhooks.stripe.Webhook.construct_event',
+            return_value=self._event(),
+        ), mock.patch(
+            'checkout.webhooks.stripe.checkout.Session.list_line_items',
+            return_value=self._line_items(),
+        ):
+            response = self._post()
+
+        self.assertEqual(response.status_code, 200)
+
+        self.session.refresh_from_db()
+        self.cart.refresh_from_db()
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PAID)
+        self.assertEqual(self.session.stripe_payment_intent, 'pi_test_123')
+        self.assertFalse(self.cart.active)
+        self.assertTrue(Order.objects.filter(checkout_session=self.session).exists())
+
+    def test_webhook_is_idempotent(self):
+        """A Stripe retry for an already-paid session must not duplicate orders."""
+        with mock.patch(
+            'checkout.webhooks.stripe.Webhook.construct_event',
+            return_value=self._event(),
+        ), mock.patch(
+            'checkout.webhooks.stripe.checkout.Session.list_line_items',
+            return_value=self._line_items(),
+        ):
+            first = self._post()
+            second = self._post()
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(
+            Order.objects.filter(checkout_session=self.session).count(), 1
+        )
+
+    def test_unknown_checkout_session_returns_404(self):
+        event = self._event()  # capture the session id before deleting
+        self.session.delete()
+        with mock.patch(
+            'checkout.webhooks.stripe.Webhook.construct_event',
+            return_value=event,
+        ):
+            response = self._post()
+        self.assertEqual(response.status_code, 404)
+
+    def test_reconciliation_updates_quantity_to_match_stripe(self):
+        """If Stripe charged a different quantity, the cart follows Stripe."""
+        line_items = self._line_items()
+        item = mock.Mock()
+        item.price.id = self.box.stripe_price_id
+        item.quantity = 3  # Stripe charged 3, cart says 2
+        line_items.auto_paging_iter.return_value = iter([item])
+
+        with mock.patch(
+            'checkout.webhooks.stripe.Webhook.construct_event',
+            return_value=self._event(),
+        ), mock.patch(
+            'checkout.webhooks.stripe.checkout.Session.list_line_items',
+            return_value=line_items,
+        ):
+            response = self._post()
+
+        self.assertEqual(response.status_code, 200)
+        cart_item = self.cart.items.get()
+        self.assertEqual(cart_item.quantity, 3)
