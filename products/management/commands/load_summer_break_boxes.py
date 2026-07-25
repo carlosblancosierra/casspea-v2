@@ -10,9 +10,14 @@ Preview everything without touching the DB or Stripe::
 
     python manage.py load_summer_break_boxes --dry-run
 
-Create the category, the Stripe prices and the four products::
+Create the category, the Stripe prices and the four products (category stays
+hidden from the shop grid — reachable only via /landing/summer-break)::
 
     python manage.py load_summer_break_boxes
+
+Same, but also make the category visible in the shop when you're ready::
+
+    python manage.py load_summer_break_boxes --publish
 
 Reuse Stripe prices you created by hand (skip the Stripe API)::
 
@@ -72,6 +77,11 @@ class Command(BaseCommand):
             "--price-id", action="append", default=[], metavar="UNITS=price_xxx",
             help="Pre-created Stripe price id for a box size, e.g. --price-id 9=price_abc. "
                  "Repeat per size. Overrides Stripe creation for that size.",
+        )
+        parser.add_argument(
+            "--publish", action="store_true",
+            help="Make the category visible in the shop grid. Off by default so the "
+                 "boxes are only reachable via the /landing/summer-break link while testing.",
         )
         parser.add_argument(
             "--deactivate", action="store_true",
@@ -137,14 +147,19 @@ class Command(BaseCommand):
         percent = options["discount_percent"]
         no_stripe = options["no_stripe"]
         deactivate = options["deactivate"]
+        publish = options["publish"]
         overrides = self._parse_price_overrides(options["price_id"])
 
         if deactivate:
             return self._handle_deactivate(dry_run)
 
-        # 1. Category
+        # 1. Category — hidden from the shop grid unless --publish is passed, so the
+        # boxes can be tested privately via /landing/summer-break first.
+        category_visibility = "visible in shop" if publish else "hidden (link-only)"
         if dry_run:
-            self.stdout.write(f"[dry-run] would ensure category '{CATEGORY_NAME}' ({CATEGORY_SLUG})")
+            self.stdout.write(
+                f"[dry-run] would ensure category '{CATEGORY_NAME}' ({CATEGORY_SLUG}) — {category_visibility}"
+            )
             category = None
         else:
             category, created = ProductCategory.objects.update_or_create(
@@ -152,12 +167,12 @@ class Command(BaseCommand):
                 defaults={
                     "name": CATEGORY_NAME,
                     "description": CATEGORY_DESCRIPTION,
-                    "active": True,
+                    "active": publish,
                     "order": 0,
                 },
             )
             self.stdout.write(self.style.SUCCESS(
-                f"{'Created' if created else 'Updated'} category {category.name}"
+                f"{'Created' if created else 'Updated'} category {category.name} ({category_visibility})"
             ))
 
         # 2. Boxes
@@ -202,6 +217,7 @@ class Command(BaseCommand):
                         "description": source.description,
                         "category": category,
                         "base_price": amount,
+                        "compare_at_price": source.base_price,
                         "stripe_price_id": price_id,
                         "weight": source.weight,
                         "box_weight": source.box_weight,

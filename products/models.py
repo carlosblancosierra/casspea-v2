@@ -111,6 +111,10 @@ class Product(models.Model):
         help_text="If True, discount codes cannot stack on top of this product "
                   "(its price is already discounted)."
     )
+    compare_at_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Original price to show struck through (e.g. the pre-discount price)."
+    )
 
     custom_options = models.JSONField(
         default=list,
