@@ -101,6 +101,17 @@ class Product(models.Model):
 
     can_pick_allergens = models.BooleanField(default=False)
 
+    disable_flavour_selection = models.BooleanField(
+        default=False,
+        help_text="If True, this box only supports 'Surprise Me' (RANDOM) selection; "
+                  "customers cannot pick individual flavours."
+    )
+    block_discount_codes = models.BooleanField(
+        default=False,
+        help_text="If True, discount codes cannot stack on top of this product "
+                  "(its price is already discounted)."
+    )
+
     custom_options = models.JSONField(
         default=list,
         blank=True,

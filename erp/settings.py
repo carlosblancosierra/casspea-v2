@@ -516,3 +516,13 @@ Q_CLUSTER = {
 # same two values, so the displayed price and the charged price can never drift.
 SHIPPING_DISCOUNT_THRESHOLD = 55  # £ cart total required for the discount
 SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option
+
+
+# Store order deadline (Summer Break).
+# After this instant the shop stops accepting new orders: creating a Stripe
+# Checkout Session is refused server-side and the frontend disables checkout.
+# Set to an empty string to keep the store open indefinitely.
+# Default: Friday 31 July 2026, 12:00 noon UK time (BST, +01:00).
+STORE_ORDER_DEADLINE = env('STORE_ORDER_DEADLINE', default='2026-07-31T12:00:00+01:00')
+# Human-readable date the shop reopens, surfaced in the "closed" messaging.
+STORE_REOPEN_LABEL = env('STORE_REOPEN_LABEL', default='1 September')
