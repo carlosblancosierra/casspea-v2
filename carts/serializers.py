@@ -176,6 +176,22 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
         if box_customization and pack_customization:
             raise serializers.ValidationError("Cannot provide both box_customization and pack_customization.")
 
+        # Enforce "Surprise Me" only for boxes that disable flavour selection
+        # (e.g. Summer Break clearance boxes). Customers may still pick allergens,
+        # but never individual flavours.
+        if getattr(product, 'disable_flavour_selection', False):
+            for customization in (box_customization, pack_customization):
+                if not customization:
+                    continue
+                if customization.get('selection_type') == 'PICK_AND_MIX':
+                    raise serializers.ValidationError({
+                        'selection_type': "This box is 'Surprise Me' only — flavours cannot be picked."
+                    })
+                if customization.get('flavor_selections') or customization.get('flavor_selections_pack'):
+                    raise serializers.ValidationError({
+                        'flavor_selections': "This box is 'Surprise Me' only — flavours cannot be picked."
+                    })
+
         # Validate selected_custom_option_key against product.custom_options (if provided)
         if selected_custom_option_key is not None:
             options = product.custom_options or []
@@ -325,6 +341,13 @@ class CartUpdateSerializer(serializers.ModelSerializer):
             if discount_code == '':
                 instance.discount = None
             else:
+                # Summer Break clearance boxes are already discounted — no code
+                # can be stacked on a cart that contains one.
+                if instance.items.filter(product__block_discount_codes=True).exists():
+                    raise serializers.ValidationError({
+                        "discount_code": "Discount codes can't be combined with already-discounted "
+                                         "Summer Break boxes. Remove the box to use a code."
+                    })
                 try:
                     discount = Discount.objects.get(code__iexact=discount_code)
                     if not discount.status[0]:
