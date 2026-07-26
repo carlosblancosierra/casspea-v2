@@ -1,0 +1,53 @@
+name: Deploy backend to Heroku
+
+# Deploys casspea-v2 to Heroku on every push to main and runs migrations.
+# The push to the Heroku git remote triggers a container-stack build from
+# heroku.yml, whose `release` phase runs `python manage.py migrate`.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   HEROKU_API_KEY    a Heroku API token  (CLI: `heroku authorizations:create`)
+#   HEROKU_APP_NAME   the Heroku app name (e.g. casspea-api)
+#
+# NOTE: if you also have "Automatic deploys" enabled in the Heroku dashboard,
+# disable it so you don't deploy twice for the same push.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: heroku-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets are configured
+        id: check
+        run: |
+          if [ -n "${{ secrets.HEROKU_API_KEY }}" ] && [ -n "${{ secrets.HEROKU_APP_NAME }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::HEROKU_API_KEY / HEROKU_APP_NAME not set — skipping Heroku deploy."
+          fi
+
+      - name: Checkout
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Heroku CLI
+        if: steps.check.outputs.ready == 'true'
+        run: curl https://cli-assets.heroku.com/install.sh | sh
+
+      - name: Push to Heroku (builds heroku.yml, release phase runs migrations)
+        if: steps.check.outputs.ready == 'true'
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          heroku git:remote -a "${{ secrets.HEROKU_APP_NAME }}"
+          git push heroku HEAD:refs/heads/main -f
