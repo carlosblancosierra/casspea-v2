@@ -48,13 +48,22 @@ CATEGORY_DESCRIPTION = (
     "25% off. Pick your allergens and let us surprise you with the flavours."
 )
 
-# units_per_box -> source Signature Box slug to clone from
+# units_per_box -> source Signature Box to clone from (by slug, or by pk when the
+# slug doesn't follow the pattern — e.g. the 96 box).
 SOURCE_BY_UNITS = {
-    9: "9-bonbons",
-    15: "15-bonbons",
-    24: "24-bonbons",
-    48: "48-bonbons",
+    9: {"slug": "9-bonbons"},
+    15: {"slug": "15-bonbons"},
+    24: {"slug": "24-bonbons"},
+    48: {"slug": "48-bonbons"},
+    96: {"id": 401},
 }
+
+
+def _get_source_product(units, ref):
+    from products.models import Product as _Product
+    if "id" in ref:
+        return _Product.objects.get(pk=ref["id"])
+    return _Product.objects.get(slug=ref["slug"])
 
 
 class Command(BaseCommand):
@@ -176,12 +185,12 @@ class Command(BaseCommand):
             ))
 
         # 2. Boxes
-        for units, source_slug in SOURCE_BY_UNITS.items():
+        for units, source_ref in SOURCE_BY_UNITS.items():
             try:
-                source = Product.objects.get(slug=source_slug)
+                source = _get_source_product(units, source_ref)
             except Product.DoesNotExist:
                 raise CommandError(
-                    f"Source box '{source_slug}' not found — load the Signature Boxes first."
+                    f"Source box for {units} units not found ({source_ref}) — load the Signature Boxes first."
                 )
 
             amount = self._discounted_price(source.base_price, percent)

@@ -341,13 +341,10 @@ class CartUpdateSerializer(serializers.ModelSerializer):
             if discount_code == '':
                 instance.discount = None
             else:
-                # Summer Break clearance boxes are already discounted — no code
-                # can be stacked on a cart that contains one.
-                if instance.items.filter(product__block_discount_codes=True).exists():
-                    raise serializers.ValidationError({
-                        "discount_code": "Discount codes can't be combined with already-discounted "
-                                         "Summer Break boxes. Remove the box to use a code."
-                    })
+                # A discount code is allowed even when the cart has a Summer Break
+                # box: the box keeps its baked-in 25% off (it's excluded from the
+                # discount maths in Cart.discounted_total / CartItem.discounted_price),
+                # while the code still applies to the other items.
                 try:
                     discount = Discount.objects.get(code__iexact=discount_code)
                     if not discount.status[0]:
