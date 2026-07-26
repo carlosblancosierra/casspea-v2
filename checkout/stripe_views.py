@@ -211,6 +211,32 @@ class StripeCheckoutSessionView(APIView):
                 status=400
             )
 
+        except stripe.error.InvalidRequestError as e:
+            # A discount whose Stripe coupon no longer exists (deleted, mistyped,
+            # or a test value) must not 500 the whole checkout — tell the customer
+            # to remove the code so they can still pay.
+            param = str(getattr(e, 'param', '') or '')
+            if 'coupon' in param or 'coupon' in str(e).lower():
+                logger.warning(
+                    "checkout_invalid_coupon",
+                    error=str(e),
+                    checkout_session_id=getattr(checkout_session, 'id', None),
+                )
+                return Response(
+                    {"error": "The discount code applied is no longer valid. Please remove it and try again."},
+                    status=400
+                )
+            logger.error(
+                "stripe_invalid_request",
+                error=str(e),
+                checkout_session_id=getattr(checkout_session, 'id', None),
+                exc_info=True
+            )
+            return Response(
+                {"error": "Unable to create checkout session"},
+                status=500
+            )
+
         except stripe.error.StripeError as e:
             logger.error(
                 "stripe_error",
@@ -306,6 +332,14 @@ class StripeCheckoutSessionEmbeddedView(StripeCheckoutSessionView):
 
         except ValidationError as e:
             return Response({"error": str(e)}, status=400)
+        except stripe.error.InvalidRequestError as e:
+            param = str(getattr(e, 'param', '') or '')
+            if 'coupon' in param or 'coupon' in str(e).lower():
+                return Response(
+                    {"error": "The discount code applied is no longer valid. Please remove it and try again."},
+                    status=400
+                )
+            return Response({"error": "Unable to create checkout session"}, status=500)
         except stripe.error.StripeError:
             return Response({"error": "Unable to create checkout session"}, status=500)
         except Exception:
