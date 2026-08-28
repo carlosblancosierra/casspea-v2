@@ -6,6 +6,7 @@ from django.conf import settings
 from checkout.models import CheckoutSession
 from rest_framework.exceptions import ValidationError
 from checkout.stripe_utils import prepare_stripe_payload
+from checkout.store_status import store_is_open
 import stripe
 import structlog
 from datetime import timedelta
@@ -65,6 +66,12 @@ class StripeCheckoutSessionView(APIView):
     )
     def post(self, request, *args, **kwargs):
         try:
+            # Store closed for Summer Break — refuse new orders past the deadline.
+            if not store_is_open():
+                raise ValidationError(
+                    "Our shop is closed for Summer Break and is not taking new orders right now."
+                )
+
             # Get or create the checkout session from the request
             checkout_session = CheckoutSession.objects.get_or_create_from_request(request)
 
@@ -280,6 +287,11 @@ class StripeCheckoutSessionEmbeddedView(StripeCheckoutSessionView):
     """
     def post(self, request, *args, **kwargs):
         try:
+            if not store_is_open():
+                raise ValidationError(
+                    "Our shop is closed for Summer Break and is not taking new orders right now."
+                )
+
             session = CheckoutSession.objects.get_or_create_from_request(request)
             if not session.shipping_address:
                 raise ValidationError("Shipping address is required")

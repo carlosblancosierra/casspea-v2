@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 import environ
 import logging
@@ -274,6 +275,18 @@ REST_FRAMEWORK = {
     ],
 }
 
+# JWT lifetimes. Defaults (5-min access / 1-day refresh) logged users out very
+# frequently; these keep sessions alive and let the token refresh sliding-window
+# style, so an active user stays signed in. Overridable via env vars.
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=env.int('ACCESS_TOKEN_LIFETIME_MINUTES', default=60)),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=env.int('REFRESH_TOKEN_LIFETIME_DAYS', default=30)),
+    # Issue a fresh refresh token on each refresh so active sessions keep sliding
+    # forward. BLACKLIST stays off to avoid logging out on concurrent refreshes.
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+}
+
 # Spectacular settings
 SPECTACULAR_SETTINGS = {
     'TITLE': 'CassPea API',
@@ -516,3 +529,13 @@ Q_CLUSTER = {
 # same two values, so the displayed price and the charged price can never drift.
 SHIPPING_DISCOUNT_THRESHOLD = 55  # £ cart total required for the discount
 SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option
+
+
+# Store order deadline (Summer Break).
+# After this instant the shop stops accepting new orders: creating a Stripe
+# Checkout Session is refused server-side and the frontend disables checkout.
+# Set to an empty string to keep the store open indefinitely.
+# Default: Friday 31 July 2026, 12:00 noon UK time (BST, +01:00).
+STORE_ORDER_DEADLINE = env('STORE_ORDER_DEADLINE', default='2026-07-31T12:00:00+01:00')
+# Human-readable date the shop reopens, surfaced in the "closed" messaging.
+STORE_REOPEN_LABEL = env('STORE_REOPEN_LABEL', default='1 September')

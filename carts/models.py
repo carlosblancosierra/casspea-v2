@@ -37,10 +37,14 @@ class Cart(models.Model):
 
         # For percentage discounts
         if self.discount.discount_type == 'PERCENTAGE':
+            excluded_products = set(self.discount.exclusions.all())
             non_excluded_total = sum(
                 item.base_price
                 for item in self.items.all()
-                if item.product not in self.discount.exclusions.all()
+                # Products that already carry a baked-in discount (e.g. Summer
+                # Break boxes) never receive an additional discount on top.
+                if item.product not in excluded_products
+                and not item.product.block_discount_codes
             )
             discount_amount = (non_excluded_total * self.discount.amount) / 100
             return max(self.base_total - discount_amount, 0)
@@ -100,7 +104,10 @@ class CartItem(models.Model):
         if not self.cart or not self.cart.is_discount_valid:
             return self.base_price
 
-        # Skip if product is in exclusions
+        # Skip if product is in exclusions, or carries a baked-in discount
+        # (e.g. Summer Break boxes) that must never be discounted further.
+        if self.product.block_discount_codes:
+            return self.base_price
         if self.product in self.cart.discount.exclusions.all():
             return self.base_price
 

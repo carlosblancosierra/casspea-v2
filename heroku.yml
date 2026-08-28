@@ -11,6 +11,14 @@ build:
     web: Dockerfile.prod
     worker: Dockerfile.prod
 
+# Runs on every deploy, before the new release goes live. On the container
+# stack Heroku ignores the Procfile, so migrations must be declared here.
+# If this command fails, Heroku aborts the release (keeps the old one).
+release:
+  image: web
+  command:
+    - python manage.py migrate --noinput
+
 run:
   web: gunicorn erp.wsgi:application --bind 0.0.0.0:$PORT
   worker: python manage.py qcluster
