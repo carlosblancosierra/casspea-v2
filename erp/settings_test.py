@@ -9,6 +9,8 @@ require, then overrides anything that would talk to an external service
 no configuration.
 """
 import os
+import tempfile
+from pathlib import Path
 
 # The base settings read these at import time and fail hard when they are
 # missing. Provide harmless defaults *before* importing them. setdefault is
@@ -38,6 +40,12 @@ DATABASES = {
         'NAME': ':memory:',
     }
 }
+
+# Point static/media at a temp dir so tests never depend on the container's
+# /vol mount existing or being writable (CI runners cannot create /vol).
+_TEST_STORAGE_ROOT = Path(tempfile.gettempdir()) / 'casspea-test-storage'
+STATIC_ROOT = _TEST_STORAGE_ROOT / 'static'
+MEDIA_ROOT = _TEST_STORAGE_ROOT / 'media'
 
 # Never send anything real during tests.
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'

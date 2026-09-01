@@ -430,9 +430,15 @@ else:
     STATIC_URL = '/static/'
     MEDIA_URL = '/media/'
 
-# Ensure storage directories exist
+# Ensure storage directories exist. This is a convenience for environments
+# that mount a writable volume (the container sets /vol/web); anywhere else —
+# CI runners, a dev checkout, a read-only filesystem — it must not be able to
+# stop Django from importing its settings.
 for directory in [STATIC_ROOT, MEDIA_ROOT]:
-    directory.mkdir(parents=True, exist_ok=True)
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
 
 
 # Stripe settings
