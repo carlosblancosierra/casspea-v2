@@ -168,7 +168,25 @@ class OrderListSerializer(serializers.ModelSerializer):
 
     def get_past_orders(self, obj):
         email = obj.checkout_session.email or ''
-        order_ids = self.context['view'].past_ids_map.get(email, [])
+
+        # The list view prebuilds past_ids_map in get_queryset so serializing a
+        # page of orders stays a fixed number of queries. The detail view has
+        # no map to build (it serializes one order), so fall back to a single
+        # lookup for that email rather than assuming the attribute exists —
+        # reading it unconditionally made every order-detail request 500.
+        past_ids_map = getattr(self.context.get('view'), 'past_ids_map', None)
+        if past_ids_map is None:
+            order_ids = list(
+                Order.objects
+                .filter(
+                    checkout_session__email=email,
+                    checkout_session__payment_status='paid',
+                )
+                .values_list('order_id', flat=True)
+            ) if email else []
+        else:
+            order_ids = past_ids_map.get(email, [])
+
         # excluimos la orden actual por si acaso
         past_orders = [oid for oid in order_ids if oid != obj.order_id]
         return past_orders
