@@ -22,7 +22,6 @@ from carts.urls import carts_urls
 from checkout.urls import urlpatterns as checkout_urls
 from addresses.urls import urlpatterns as addresses_urls
 from shipping.urls import urlpatterns as shipping_urls
-from leads.urls import urlpatterns as leads_urls
 from users.urls import urlpatterns as user_urls
 from orders.urls import urlpatterns as orders_urls
 from royalmail.urls import urlpatterns as royalmail_urls
@@ -57,7 +56,7 @@ urlpatterns = [
     path('health/', health_check, name='health_check'),
     path('api/csrf/', get_csrf_token),
     path('api/shipping/', include(shipping_urls)),
-    path('api/leads/', include(leads_urls)),
+    path('api/leads/', include('leads.urls')),
     path('api/users/', include(user_urls)),
     path('api/orders/', include(orders_urls)),
     path('api/royalmail/', include(royalmail_urls)),

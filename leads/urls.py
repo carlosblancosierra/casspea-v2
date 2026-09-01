@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import SubscribeNewsletterView, ListLeadsView, CSVLeadsView, GenericLeadSubscribeView
 
-app_name = 'mails'
+app_name = 'leads'
 
 urlpatterns = [
     path('subscribe/', SubscribeNewsletterView.as_view(), name='subscribe'),

@@ -5,7 +5,7 @@ from .models import Lead
 
 class LeadTests(APITestCase):
     def test_subscribe_newsletter(self):
-        url = reverse('leads:subscribe-newsletter')
+        url = reverse('leads:subscribe')
         data = {'email': 'user@example.com'}
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)

@@ -5,6 +5,23 @@ from django.db import transaction
 logger = structlog.get_logger(__name__)
 
 class CartManager(models.Manager):
+    def for_serialization(self, pk):
+        """Fetch a cart with everything CartSerializer touches, so serializing
+        a cart is a constant number of queries instead of one per item /
+        customization / flavour / allergen."""
+        return (
+            self.select_related('discount')
+            .prefetch_related(
+                'discount__exclusions',
+                'items__product',
+                'items__box_customization__allergens',
+                'items__box_customization__flavor_selections__flavor',
+                'items__pack_customization__allergens',
+                'items__pack_customization__flavor_selections_pack__flavor',
+            )
+            .get(pk=pk)
+        )
+
     def get_or_create_from_request(self, request):
         """
         Get or create a cart based on session or user.
