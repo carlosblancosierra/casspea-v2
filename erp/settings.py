@@ -540,8 +540,10 @@ SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option
 # Store order deadline (Summer Break).
 # After this instant the shop stops accepting new orders: creating a Stripe
 # Checkout Session is refused server-side and the frontend disables checkout.
-# Set to an empty string to keep the store open indefinitely.
-# Default: Friday 31 July 2026, 12:00 noon UK time (BST, +01:00).
-STORE_ORDER_DEADLINE = env('STORE_ORDER_DEADLINE', default='2026-07-31T12:00:00+01:00')
+# Empty string keeps the store open indefinitely.
+# The Summer Break is over, so the default is now empty (no deadline). To run the
+# closure again, set STORE_ORDER_DEADLINE (env, ISO 8601, e.g.
+# '2026-07-31T12:00:00+01:00') and STORE_REOPEN_LABEL below.
+STORE_ORDER_DEADLINE = env('STORE_ORDER_DEADLINE', default='')
 # Human-readable date the shop reopens, surfaced in the "closed" messaging.
 STORE_REOPEN_LABEL = env('STORE_REOPEN_LABEL', default='1 September')
