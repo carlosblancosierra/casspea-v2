@@ -544,4 +544,4 @@ SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option
 # Default: Friday 31 July 2026, 12:00 noon UK time (BST, +01:00).
 STORE_ORDER_DEADLINE = env('STORE_ORDER_DEADLINE', default='2026-07-31T12:00:00+01:00')
 # Human-readable date the shop reopens, surfaced in the "closed" messaging.
-STORE_REOPEN_LABEL = env('STORE_REOPEN_LABEL', default='1 September')
+STORE_REOPEN_LABEL = env('STORE_REOPEN_LABEL', default='the first week of September')
