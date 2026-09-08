@@ -57,3 +57,33 @@ class ShippingOptionPricingTests(TestCase):
                 int((pricing['discounted_price'] * 100).to_integral_value()),
                 msg=f'mismatch at cart total {total}',
             )
+
+
+class GuaranteedFlagTests(TestCase):
+    """The checkout words guaranteed services differently from estimates, so
+    the flag has to mean what it says. Most orders here are gifts for a fixed
+    date; calling an estimate a guarantee is the expensive kind of wrong."""
+
+    fixtures = ['initial_shipping.json']
+
+    def test_only_special_delivery_is_guaranteed(self):
+        guaranteed = ShippingOption.objects.filter(guaranteed=True)
+
+        self.assertEqual([o.name for o in guaranteed], ['Next Day Guaranteed'])
+
+    def test_tracked_services_are_estimates(self):
+        for name in ('Priority 24', 'Regular 48'):
+            with self.subTest(option=name):
+                self.assertFalse(ShippingOption.objects.get(name=name).guaranteed)
+
+    def test_new_options_are_not_guaranteed_unless_said_so(self):
+        option = ShippingOption.objects.create(
+            company_id=1,
+            name='Some new service',
+            delivery_speed='REGULAR',
+            price=Decimal('4.00'),
+            estimated_days_min=2,
+            estimated_days_max=3,
+        )
+
+        self.assertFalse(option.guaranteed)

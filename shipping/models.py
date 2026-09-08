@@ -48,6 +48,16 @@ class ShippingOption(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(30)]
     )
 
+    guaranteed = models.BooleanField(
+        default=False,
+        help_text=(
+            "True only for services the carrier contractually guarantees, like "
+            "Royal Mail Special Delivery. Everything else is an estimate, and "
+            "the checkout must word it that way — most orders are gifts for a "
+            "fixed date, so the difference matters to the customer."
+        ),
+    )
+
     service_code = models.CharField(max_length=50, unique=True, null=True, blank=True)
 
     active = models.BooleanField(default=True)

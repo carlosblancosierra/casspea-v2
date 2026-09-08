@@ -43,6 +43,7 @@ class ShippingOptionSerializer(serializers.ModelSerializer):
             'id', 'name', 'delivery_speed',
             'price', 'original_price', 'discounted_price', 'discount_amount',
             'estimated_days_min', 'estimated_days_max',
+            'guaranteed',
             'description', 'disabled', 'disabled_reason'
         ]
 
