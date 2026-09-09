@@ -87,3 +87,85 @@ class GuaranteedFlagTests(TestCase):
         )
 
         self.assertFalse(option.guaranteed)
+
+
+class EstimateRangeTests(TestCase):
+    """
+    A service the carrier describes as a range must be stored as a range.
+
+    Every option used to have estimated_days_min == estimated_days_max, so the
+    checkout printed a single delivery date for Tracked 24 and Tracked 48 —
+    a promise neither we nor Royal Mail have made. Only Special Delivery is
+    sold as one guaranteed day.
+    """
+
+    fixtures = ['initial_shipping.json']
+
+    def test_estimated_services_span_more_than_one_day(self):
+        for name in ('Priority 24', 'Regular 48'):
+            with self.subTest(option=name):
+                option = ShippingOption.objects.get(name=name)
+                self.assertGreater(
+                    option.estimated_days_max,
+                    option.estimated_days_min,
+                    f'{name} is an estimate, so it cannot claim a single delivery day',
+                )
+
+    def test_the_guaranteed_service_is_a_single_day(self):
+        option = ShippingOption.objects.get(name='Next Day Guaranteed')
+
+        self.assertEqual(option.estimated_days_min, option.estimated_days_max)
+
+    def test_every_estimate_is_a_range_and_every_range_is_an_estimate(self):
+        """The two fields have to agree: a single-day option is exactly the
+        one the carrier guarantees."""
+        for option in ShippingOption.objects.all():
+            with self.subTest(option=option.name):
+                is_single_day = option.estimated_days_min == option.estimated_days_max
+                self.assertEqual(is_single_day, option.guaranteed)
+
+
+class WidenEstimateRangesMigrationTests(TestCase):
+    """
+    The fixture is already correct, so it cannot prove the migration fixes a
+    live database — which is the only place the bad data actually is. This
+    puts the rows back the way production holds them and runs the migration's
+    own function over them.
+    """
+
+    fixtures = ['initial_shipping.json']
+
+    def setUp(self):
+        # Reintroduce the bug: every option claiming a single delivery day.
+        for option in ShippingOption.objects.all():
+            option.estimated_days_max = option.estimated_days_min
+            option.save(update_fields=['estimated_days_max'])
+
+    def _run_migration(self):
+        from importlib import import_module
+        from django.apps import apps
+        # The module name starts with a digit, so it cannot be imported with
+        # a plain import statement.
+        module = import_module('shipping.migrations.0007_widen_estimate_ranges')
+        module.widen_estimate_ranges(apps, None)
+
+    def test_widens_the_estimated_services(self):
+        self._run_migration()
+
+        self.assertEqual(ShippingOption.objects.get(name='Priority 24').estimated_days_max, 2)
+        self.assertEqual(ShippingOption.objects.get(name='Regular 48').estimated_days_max, 3)
+
+    def test_leaves_the_guaranteed_service_as_a_single_day(self):
+        self._run_migration()
+
+        option = ShippingOption.objects.get(name='Next Day Guaranteed')
+        self.assertEqual(option.estimated_days_min, option.estimated_days_max)
+
+    def test_does_not_widen_a_range_someone_already_set(self):
+        already = ShippingOption.objects.get(name='Regular 48')
+        already.estimated_days_max = 5
+        already.save(update_fields=['estimated_days_max'])
+
+        self._run_migration()
+
+        self.assertEqual(ShippingOption.objects.get(name='Regular 48').estimated_days_max, 5)
