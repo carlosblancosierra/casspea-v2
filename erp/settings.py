@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'leads',
     'royalmail',
     'personalized',
+    'experiments',
 ]
 
 MIDDLEWARE = [
