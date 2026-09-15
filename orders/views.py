@@ -7,19 +7,25 @@ from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.db.models.functions import TruncMonth
 
 from rest_framework import generics, permissions
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.authentication import SessionAuthentication
 
 from users.authentication import CustomJWTAuthentication
 from .models import Order, UnitsSold
-from .serializers import OrderListSerializer, CustomerOrderSerializer, CustomerShippingDateUpdateSerializer
+from .serializers import (
+    OrderListSerializer,
+    OrderSummarySerializer,
+    CustomerOrderSerializer,
+    CustomerShippingDateUpdateSerializer,
+)
 from flavours.models import Flavour
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.db.models import IntegerField
 from carts.models import CartItem
-from django.db.models import Max
+from django.db.models import Max, OuterRef, Subquery, Q
 from rest_framework import status
 
 
@@ -45,7 +51,12 @@ class OrderListView(generics.ListAPIView):
             'checkout_session__cart__items',
             'checkout_session__cart__items__product',
             'checkout_session__cart__items__box_customization',
+            'checkout_session__cart__items__box_customization__flavor_selections',
+            'checkout_session__cart__items__box_customization__allergens',
             'checkout_session__cart__items__pack_customization',
+            'checkout_session__cart__items__pack_customization__flavor_selections',
+            'checkout_session__cart__items__pack_customization__allergens',
+            'checkout_session__cart__discount',
         )
 
         # 1) Rango de fechas como antes…
@@ -79,6 +90,83 @@ class OrderListView(generics.ListAPIView):
             item['checkout_session__email'] or '': item['past_orders']
             for item in paid
         }
+        return qs.order_by('-created')
+
+
+class OrderSummaryPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
+class OrderSummaryListView(generics.ListAPIView):
+    """
+    Light, paginated list for the orders table.
+    GET /api/orders/summary/
+
+    Returns one flat row per order instead of the whole object graph, so a page
+    of orders is a handful of queries and a small payload. The detail drawer
+    fetches the full order from OrderDetailView on demand.
+
+    Kept separate from OrderListView so the existing orders view, which needs
+    the nested data, keeps working unchanged.
+    """
+    serializer_class = OrderSummarySerializer
+    permission_classes = [permissions.IsAdminUser]
+    authentication_classes = [CustomJWTAuthentication]
+    pagination_class = OrderSummaryPagination
+
+    def get_queryset(self):
+        qs = Order.objects.select_related(
+            'checkout_session',
+            'checkout_session__cart',
+            'checkout_session__cart__discount',
+            'checkout_session__shipping_address',
+            'checkout_session__shipping_option',
+        ).prefetch_related(
+            # Not serialized, but total_with_shipping walks the cart to compute
+            # the total, so without these the page costs two queries per order.
+            'checkout_session__cart__items',
+            'checkout_session__cart__items__product',
+            'checkout_session__cart__discount__exclusions',
+        )
+
+        # Total units per order, as a subquery so it cannot fan out the rows.
+        item_count = (
+            CartItem.objects
+            .filter(cart=OuterRef('checkout_session__cart'))
+            .values('cart')
+            .annotate(total=Sum('quantity'))
+            .values('total')[:1]
+        )
+        qs = qs.annotate(item_count=Subquery(item_count, output_field=IntegerField()))
+
+        params = self.request.query_params
+
+        # Date range. Unlike OrderListView, end_date is honoured on its own.
+        start_date = params.get('start_date')
+        end_date = params.get('end_date')
+        if start_date:
+            qs = qs.filter(created__gte=timezone.make_aware(
+                datetime.strptime(start_date, '%Y-%m-%d')))
+        if end_date:
+            qs = qs.filter(created__lt=timezone.make_aware(
+                datetime.strptime(end_date, '%Y-%m-%d')) + timedelta(days=1))
+
+        status_param = params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        search = params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(order_id__icontains=search)
+                | Q(checkout_session__email__icontains=search)
+                | Q(tracking_number__icontains=search)
+                | Q(checkout_session__shipping_address__first_name__icontains=search)
+                | Q(checkout_session__shipping_address__last_name__icontains=search)
+            )
+
         return qs.order_by('-created')
 
 

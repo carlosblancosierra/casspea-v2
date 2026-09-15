@@ -234,6 +234,8 @@ def stripe_webhook(request):
                         staff_html_content = render_to_string('mails/order_paid_staff.html', {
                             'order': order,
                             'current_year': timezone.now().year,
+                            # Lets the template link staff straight to the order.
+                            'site_url': settings.SITE_URL,
                         })
 
                         send_mail(

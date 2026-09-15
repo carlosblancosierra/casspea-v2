@@ -192,6 +192,70 @@ class OrderListSerializer(serializers.ModelSerializer):
         return past_orders
 
 
+class OrderSummarySerializer(serializers.ModelSerializer):
+    """
+    One flat row per order for the orders table.
+
+    Deliberately shallow: no cart, no items, no addresses. Everything the table
+    shows is either a column on Order or a single hop, so a page of rows costs a
+    handful of queries. The drawer uses OrderListSerializer for the full detail.
+    """
+    customer_name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
+    total_with_shipping = serializers.SerializerMethodField()
+    shipping_date = serializers.SerializerMethodField()
+    shipping_option_name = serializers.SerializerMethodField()
+    item_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            'order_id',
+            'created',
+            'status',
+            'payment_status',
+            'customer_name',
+            'email',
+            'total_with_shipping',
+            'shipping_date',
+            'shipping_option_name',
+            'tracking_number',
+            'shipping_order_id',
+            'item_count',
+        ]
+
+    def get_customer_name(self, obj):
+        address = getattr(obj.checkout_session, 'shipping_address', None)
+        if not address:
+            return ''
+        name = ' '.join(
+            part for part in [address.first_name, address.last_name] if part
+        ).strip()
+        return name or (address.full_name or '')
+
+    def get_email(self, obj):
+        return obj.checkout_session.email or ''
+
+    def get_payment_status(self, obj):
+        return obj.payment_status
+
+    def get_total_with_shipping(self, obj):
+        return obj.checkout_session.total_with_shipping
+
+    def get_shipping_date(self, obj):
+        cart = getattr(obj.checkout_session, 'cart', None)
+        return getattr(cart, 'shipping_date', None) if cart else None
+
+    def get_shipping_option_name(self, obj):
+        option = getattr(obj.checkout_session, 'shipping_option', None)
+        return option.name if option else None
+
+    def get_item_count(self, obj):
+        # Annotated by OrderSummaryListView; None when the cart has no items.
+        return getattr(obj, 'item_count', None) or 0
+
+
 class CustomerOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order

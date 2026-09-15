@@ -36,6 +36,9 @@ class Flavour(models.Model):
     slug = models.SlugField(unique=True)
     description = models.TextField()
     mini_description = models.TextField()
+    # Long-form copy for the flavour page's full-width rows. Optional: the page
+    # falls back to `description` (one sentence) when this is empty.
+    story = models.TextField(blank=True, default='')
     allergens = models.ManyToManyField(Allergen)
     featured = models.BooleanField(default=False)
     featured_message = models.TextField(null=True, blank=True)

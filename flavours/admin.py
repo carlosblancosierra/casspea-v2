@@ -12,7 +12,7 @@ class FlavourCategoryAdmin(admin.ModelAdmin):
 class FlavourAdmin(admin.ModelAdmin):
     list_display = ['name', 'category', 'active', 'created', 'updated']
     list_filter = ['category', 'active', 'allergens']
-    search_fields = ['name', 'description', 'mini_description']
+    search_fields = ['name', 'description', 'mini_description', 'story']
     filter_horizontal = ['allergens']
     actions = ['make_active', 'make_inactive']
 

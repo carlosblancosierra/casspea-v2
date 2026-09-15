@@ -460,7 +460,7 @@ ADMINS = [('Carlos Blanco', 'carlosblancosierra@gmail.com')]
 STAFF_EMAILS = ['info@casspea.co.uk', 'sandy.gomezc@gmail.com', 'carlosblancosierra@gmail.com']
 
 # Site URL for tracking
-SITE_URL = 'https://casspea.co.uk'
+SITE_URL = 'https://www.casspea.co.uk'
 
 # Use WhiteNoise for static files
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
