@@ -7,6 +7,7 @@ app_name = 'orders'
 urlpatterns = [
     path('', views.OrderListView.as_view(), name='order-list'),
     path('send-tracking-code-mail/', mails_views.OrderShippingEmailView.as_view(), name='send-tracking-code-mail'),
+    path('summary/', views.OrderSummaryListView.as_view(), name='order-summary-list'),
     path('csv/', views.export_product_sales_csv, name='export-product-sales-csv'),
     path('flavours-sold/', views.FlavoursSoldView.as_view(), name='flavours-sold'),
     path('flavours-sold/csv/', views.FlavoursSoldCSVView.as_view(), name='flavours-sold-csv'),
