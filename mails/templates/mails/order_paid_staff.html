@@ -165,7 +165,7 @@
         <div class="hero">
             <h1>New Order Confirmation</h1>
             <p>A new order has been placed.</p>
-            {% comment %} <a href="https://www.casspea.co.uk/" class="button">View Your Order</a> {% endcomment %}
+            <a href="{{ site_url }}/orders?order={{ order.order_id }}" class="button">View full order</a>
         </div>
 
         <!-- Content Section -->
