@@ -169,3 +169,81 @@ class WidenEstimateRangesMigrationTests(TestCase):
         self._run_migration()
 
         self.assertEqual(ShippingOption.objects.get(name='Regular 48').estimated_days_max, 5)
+
+
+class OfferedOptionsTests(TestCase):
+    """
+    Two options, not three.
+
+    Priority 24 sat between the tracked service and Special Delivery — dearer
+    than one, without the guarantee of the other — so it was a third column of
+    near-identical text to compare and no real third answer.
+    """
+
+    fixtures = ['initial_shipping.json']
+
+    def test_only_two_options_are_offered(self):
+        offered = ShippingOption.objects.filter(active=True).order_by('price')
+
+        self.assertEqual([o.name for o in offered], ['Regular 48', 'Next Day Guaranteed'])
+
+    def test_the_retired_option_is_kept_not_deleted(self):
+        """Every order ever placed with it points at this row, and that FK is
+        SET_NULL — deleting it would erase what those customers paid for."""
+        retired = ShippingOption.objects.get(name='Priority 24')
+
+        self.assertFalse(retired.active)
+
+    def test_the_two_offered_options_are_a_real_choice(self):
+        """One is a range and cheap, the other is a guaranteed date. If both
+        were the same shape the customer would be picking on price alone."""
+        tracked = ShippingOption.objects.get(name='Regular 48')
+        guaranteed = ShippingOption.objects.get(name='Next Day Guaranteed')
+
+        self.assertFalse(tracked.guaranteed)
+        self.assertGreater(tracked.estimated_days_max, tracked.estimated_days_min)
+        self.assertTrue(guaranteed.guaranteed)
+        self.assertEqual(guaranteed.estimated_days_min, guaranteed.estimated_days_max)
+        self.assertLess(tracked.price, guaranteed.price)
+
+
+@override_settings(SHIPPING_DISCOUNT_THRESHOLD=56, SHIPPING_DISCOUNT_AMOUNT='6.00')
+class FreeDeliveryThresholdTests(TestCase):
+    """
+    £6 off over £56, chosen so the tracked option lands at exactly free.
+
+    A threshold only works as an incentive if the reward is legible. "Free
+    delivery" is; "£3.99 becomes 99p off" is not.
+    """
+
+    fixtures = ['initial_shipping.json']
+
+    def test_tracked_delivery_is_free_over_the_threshold(self):
+        tracked = ShippingOption.objects.get(name='Regular 48')
+
+        pricing = tracked.pricing_for_cart_total(Decimal('56.00'))
+
+        self.assertEqual(pricing['discounted_price'], Decimal('0.00'))
+        self.assertEqual(pricing['discounted_cents'], 0)
+
+    def test_the_guaranteed_option_is_discounted_by_the_same_amount(self):
+        guaranteed = ShippingOption.objects.get(name='Next Day Guaranteed')
+
+        pricing = guaranteed.pricing_for_cart_total(Decimal('56.00'))
+
+        self.assertEqual(pricing['discounted_price'], Decimal('5.99'))
+
+    def test_a_penny_under_the_threshold_pays_full_price(self):
+        tracked = ShippingOption.objects.get(name='Regular 48')
+
+        pricing = tracked.pricing_for_cart_total(Decimal('55.99'))
+
+        self.assertEqual(pricing['discounted_price'], Decimal('3.99'))
+
+    def test_the_discount_never_goes_negative(self):
+        """A £3.99 option minus £6 is free, not a 2.01 credit."""
+        tracked = ShippingOption.objects.get(name='Regular 48')
+
+        pricing = tracked.pricing_for_cart_total(Decimal('500.00'))
+
+        self.assertEqual(pricing['discounted_price'], Decimal('0.00'))
