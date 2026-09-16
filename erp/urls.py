@@ -28,6 +28,7 @@ from royalmail.urls import urlpatterns as royalmail_urls
 from mails.urls import urlpatterns as mails_urls
 from personalized.urls import urlpatterns as personalized_urls
 from discounts.urls import urlpatterns as discounts_urls
+from experiments.urls import urlpatterns as experiments_urls
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
@@ -63,6 +64,7 @@ urlpatterns = [
     path('api/mails/', include(mails_urls)),
     path('api/personalized/', include(personalized_urls)),
     path('api/discounts/', include(discounts_urls)),
+    path('api/experiments/', include(experiments_urls)),
 ]
 
 if settings.DEBUG and not settings.USE_S3:
