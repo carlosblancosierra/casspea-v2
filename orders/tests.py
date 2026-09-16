@@ -21,6 +21,12 @@ from carts.tests.test_totals import make_product
 from checkout.models import CheckoutSession
 
 from .models import Order
+from .views import (
+    ORDER_PREFETCH_RELATED,
+    ORDER_SELECT_RELATED,
+    OrderDetailView,
+    OrderListView,
+)
 
 
 class AdminOrderEndpointTest(TestCase):
@@ -185,3 +191,78 @@ class OrderSummaryEndpointTest(TestCase):
             self.client.get('/api/orders/summary/')
 
         self.assertEqual(len(five_orders), len(one_order))
+
+
+class OrderQuerysetPrefetchTests(TestCase):
+    """
+    The prefetch paths the order views share have to be real.
+
+    `/api/orders/` returned 500 on every request because the pack line said
+    `flavor_selections`, which is the related_name on the BOX side; the pack
+    side is `flavor_selections_pack`. prefetch_related does not check its
+    arguments until the queryset is evaluated — no import error, no system
+    check, nothing until production.
+
+    The list test above is the one that would have caught it, and it is
+    skipped outside Postgres because the view aggregates with ArrayAgg. That
+    gap is exactly what let this ship, so these evaluate the paths directly
+    and run on any database.
+    """
+
+    def setUp(self):
+        self.box = make_product('Box of 9', '14.99')
+
+    def make_order_with_a_pack(self):
+        from carts.models import CartItemBoxFlavorSelection, CartItemPackCustomization
+        from flavours.models import Flavour, FlavourCategory
+
+        cart = Cart.objects.create(session_id='prefetch-test')
+        item = CartItem.objects.create(cart=cart, product=self.box, quantity=1)
+        pack = CartItemPackCustomization.objects.create(
+            cart_item=item, selection_type='PICK_AND_MIX'
+        )
+        # Flavour.category defaults to pk 1, which only exists if something
+        # made it.
+        category = FlavourCategory.objects.create(name='Classics', slug='classics')
+        flavour = Flavour.objects.create(
+            name='Salted Caramel', slug='salted-caramel', category=category
+        )
+        CartItemBoxFlavorSelection.objects.create(
+            pack_customization=pack, flavor=flavour, quantity=9
+        )
+        session = CheckoutSession.objects.create(cart=cart, email='pack@example.com')
+        session.payment_status = 'paid'
+        session.save()
+        return Order.objects.create(checkout_session=session)
+
+    def test_every_prefetch_path_resolves(self):
+        self.make_order_with_a_pack()
+
+        # Evaluating is the point: an invalid path raises here and nowhere else.
+        orders = list(
+            Order.objects
+            .select_related(*ORDER_SELECT_RELATED)
+            .prefetch_related(*ORDER_PREFETCH_RELATED)
+        )
+
+        self.assertEqual(len(orders), 1)
+
+    def test_the_pack_flavours_are_the_ones_actually_prefetched(self):
+        """A path that resolves but points at the wrong relation would still
+        serve empty flavours, so check the data comes back."""
+        self.make_order_with_a_pack()
+
+        order = (
+            Order.objects
+            .prefetch_related(*ORDER_PREFETCH_RELATED)
+            .get()
+        )
+        item = order.checkout_session.cart.items.all()[0]
+        selections = item.pack_customization.flavor_selections_pack.all()
+
+        self.assertEqual([s.flavor.name for s in selections], ['Salted Caramel'])
+
+    def test_the_two_views_share_one_definition(self):
+        """They had a copy each, and both copies carried the same typo."""
+        self.assertIs(OrderListView.get_queryset.__globals__['ORDER_PREFETCH_RELATED'],
+                      OrderDetailView.get_queryset.__globals__['ORDER_PREFETCH_RELATED'])

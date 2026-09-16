@@ -29,6 +29,37 @@ from django.db.models import Max, OuterRef, Subquery, Q
 from rest_framework import status
 
 
+# Everything OrderListSerializer touches, in one place.
+#
+# The two views that serve an order had their own copies of this list, and the
+# pack line in both named `flavor_selections` — but that related_name belongs
+# to the BOX side. The pack side is `flavor_selections_pack`
+# (carts/models.py: CartItemBoxFlavorSelection), so `/api/orders/` raised
+# AttributeError on every request. prefetch_related does not validate its
+# arguments until the queryset is evaluated, so nothing complained at import
+# or in a system check — it simply 500'd in production.
+ORDER_SELECT_RELATED = (
+    'checkout_session',
+    'checkout_session__cart',
+    'checkout_session__shipping_address',
+    'checkout_session__billing_address',
+    'checkout_session__shipping_option',
+)
+
+ORDER_PREFETCH_RELATED = (
+    'status_history',
+    'checkout_session__cart__items',
+    'checkout_session__cart__items__product',
+    'checkout_session__cart__items__box_customization',
+    'checkout_session__cart__items__box_customization__flavor_selections',
+    'checkout_session__cart__items__box_customization__allergens',
+    'checkout_session__cart__items__pack_customization',
+    'checkout_session__cart__items__pack_customization__flavor_selections_pack',
+    'checkout_session__cart__items__pack_customization__allergens',
+    'checkout_session__cart__discount',
+)
+
+
 class OrderListView(generics.ListAPIView):
     """
     List all orders with filtering and search capabilities
@@ -40,23 +71,10 @@ class OrderListView(generics.ListAPIView):
     ordering = ['-created']
 
     def get_queryset(self):
-        qs = Order.objects.select_related(
-            'checkout_session',
-            'checkout_session__cart',
-            'checkout_session__shipping_address',
-            'checkout_session__billing_address',
-            'checkout_session__shipping_option'
-        ).prefetch_related(
-            'status_history',
-            'checkout_session__cart__items',
-            'checkout_session__cart__items__product',
-            'checkout_session__cart__items__box_customization',
-            'checkout_session__cart__items__box_customization__flavor_selections',
-            'checkout_session__cart__items__box_customization__allergens',
-            'checkout_session__cart__items__pack_customization',
-            'checkout_session__cart__items__pack_customization__flavor_selections',
-            'checkout_session__cart__items__pack_customization__allergens',
-            'checkout_session__cart__discount',
+        qs = (
+            Order.objects
+            .select_related(*ORDER_SELECT_RELATED)
+            .prefetch_related(*ORDER_PREFETCH_RELATED)
         )
 
         # 1) Rango de fechas como antes…
@@ -184,25 +202,8 @@ class OrderDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return (
             Order.objects
-            .select_related(
-                'checkout_session',
-                'checkout_session__cart',
-                'checkout_session__shipping_address',
-                'checkout_session__billing_address',
-                'checkout_session__shipping_option'
-            )
-            .prefetch_related(
-                'status_history',
-                'checkout_session__cart__items',
-                'checkout_session__cart__items__product',
-                'checkout_session__cart__items__box_customization',
-                'checkout_session__cart__items__box_customization__flavor_selections',
-                'checkout_session__cart__items__box_customization__allergens',
-                'checkout_session__cart__items__pack_customization',
-                'checkout_session__cart__items__pack_customization__flavor_selections',
-                'checkout_session__cart__items__pack_customization__allergens',
-                'checkout_session__cart__discount'
-            )
+            .select_related(*ORDER_SELECT_RELATED)
+            .prefetch_related(*ORDER_PREFETCH_RELATED)
         )
 
 
