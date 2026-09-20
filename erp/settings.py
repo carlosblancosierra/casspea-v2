@@ -88,6 +88,7 @@ INSTALLED_APPS = [
     'leads',
     'royalmail',
     'personalized',
+    'experiments',
 ]
 
 MIDDLEWARE = [
@@ -533,8 +534,11 @@ Q_CLUSTER = {
 # option gets this amount knocked off. Both the shipping-options API (what we
 # show the customer) and the Stripe checkout session (what we charge) read these
 # same two values, so the displayed price and the charged price can never drift.
-SHIPPING_DISCOUNT_THRESHOLD = 55  # £ cart total required for the discount
-SHIPPING_DISCOUNT_AMOUNT = '5.00'  # £ taken off each shipping option
+SHIPPING_DISCOUNT_THRESHOLD = 56  # £ cart total required for the discount
+# £6 rather than £5 so the tracked option lands at exactly free. The point of a
+# threshold is a round, obvious reward — "free delivery" sells, "99p off" does
+# not — and Special Delivery comes down to £5.99 by the same subtraction.
+SHIPPING_DISCOUNT_AMOUNT = '6.00'  # £ taken off each shipping option
 
 
 # Store order deadline (Summer Break).

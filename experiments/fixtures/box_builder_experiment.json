@@ -1,0 +1,12 @@
+[
+  {
+    "model": "experiments.experiment",
+    "fields": {
+      "key": "box_builder",
+      "name": "Box builder: 7-step form vs quick pre-filled box",
+      "description": "Control is the existing step-by-step builder on the product page. 'quick' is the one-screen pre-filled builder from the Father's Day landing, locked to the product's box size and keeping the allergen question. Decided on paid orders per visitor, not add-to-cart.",
+      "active": true,
+      "variants": {"control": 50, "quick": 50}
+    }
+  }
+]

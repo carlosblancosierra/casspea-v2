@@ -22,11 +22,12 @@
       "price": "4.99",
       "cents": 499,
       "estimated_days_min": 1,
-      "estimated_days_max": 1,
+      "estimated_days_max": 2,
       "description": "Priority 24-hour delivery service",
-      "active": true,
+      "active": false,
       "created": "2024-01-01T00:00:00Z",
-      "updated": "2024-01-01T00:00:00Z"
+      "updated": "2024-01-01T00:00:00Z",
+      "guaranteed": false
     }
   },
   {
@@ -39,11 +40,12 @@
       "price": "3.99",
       "cents": 399,
       "estimated_days_min": 2,
-      "estimated_days_max": 2,
-      "description": "Standard 48-hour delivery service (Free for orders over £45)",
+      "estimated_days_max": 3,
+      "description": "Tracked delivery in two to three working days (free on orders over £56)",
       "active": true,
       "created": "2024-01-01T00:00:00Z",
-      "updated": "2024-01-01T00:00:00Z"
+      "updated": "2024-01-01T00:00:00Z",
+      "guaranteed": false
     }
   },
   {
@@ -60,7 +62,8 @@
       "description": "Guaranteed next day delivery service",
       "active": true,
       "created": "2024-01-01T00:00:00Z",
-      "updated": "2024-01-01T00:00:00Z"
+      "updated": "2024-01-01T00:00:00Z",
+      "guaranteed": true
     }
   }
 ]
