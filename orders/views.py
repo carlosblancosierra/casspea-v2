@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, time
 import csv
-from django.contrib.postgres.aggregates import ArrayAgg
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Sum, F, ExpressionWrapper, DecimalField
@@ -23,6 +22,7 @@ from flavours.models import Flavour
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from collections import defaultdict
 from django.db.models import IntegerField
 from carts.models import CartItem
 from django.db.models import Max, OuterRef, Subquery, Q
@@ -45,6 +45,10 @@ ORDER_SELECT_RELATED = (
     'checkout_session__billing_address',
     'checkout_session__shipping_option',
 )
+
+# A ceiling on ?ids=, which returns the whole object graph per order. Staff
+# pick a day or two's worth to prepare, not a year's.
+MAX_ORDER_IDS = 200
 
 ORDER_PREFETCH_RELATED = (
     'status_history',
@@ -77,23 +81,38 @@ class OrderListView(generics.ListAPIView):
             .prefetch_related(*ORDER_PREFETCH_RELATED)
         )
 
-        # 1) Rango de fechas como antes…
-        now = timezone.now()
-        start = now - timedelta(days=10)
-        end = now
-        start_date = self.request.query_params.get('start_date')
-        end_date = self.request.query_params.get('end_date')
-        if start_date:
-            start = timezone.make_aware(
-                datetime.strptime(start_date, '%Y-%m-%d')
-            )
-            if end_date:
-                end = timezone.make_aware(
-                    datetime.strptime(end_date, '%Y-%m-%d')
-                ) + timedelta(days=1)
-        qs = qs.filter(created__range=(start, end))
+        # Explicit order ids win over the date range. The production-totals
+        # screen lets staff tick orders from any page of the table, so the
+        # dates they happen to be browsing must not silently drop a selected
+        # order from the totals they are about to bake to.
+        ids = self.request.query_params.get('ids')
+        if ids:
+            wanted = [value.strip() for value in ids.split(',') if value.strip()][:MAX_ORDER_IDS]
+            qs = qs.filter(order_id__in=wanted)
+        else:
+            # 1) Rango de fechas como antes…
+            now = timezone.now()
+            start = now - timedelta(days=10)
+            end = now
+            start_date = self.request.query_params.get('start_date')
+            end_date = self.request.query_params.get('end_date')
+            if start_date:
+                start = timezone.make_aware(
+                    datetime.strptime(start_date, '%Y-%m-%d')
+                )
+                if end_date:
+                    end = timezone.make_aware(
+                        datetime.strptime(end_date, '%Y-%m-%d')
+                    ) + timedelta(days=1)
+            qs = qs.filter(created__range=(start, end))
 
         # 2) Pre-cargar el mapa email → [order_id de pagados]
+        #
+        # Grouped in Python rather than with ArrayAgg, which is Postgres-only.
+        # It is still one query, and it is the difference between this view
+        # being testable everywhere and not being testable at all: the test
+        # that covers it used to be skipped outside Postgres, which is how a
+        # broken prefetch path reached production (#14).
         emails = qs.values_list('checkout_session__email', flat=True).distinct()
         paid = (
             Order.objects
@@ -101,13 +120,12 @@ class OrderListView(generics.ListAPIView):
                 checkout_session__email__in=emails,
                 checkout_session__payment_status='paid'
             )
-            .values('checkout_session__email')
-            .annotate(past_orders=ArrayAgg('order_id'))
+            .values_list('checkout_session__email', 'order_id')
         )
-        self.past_ids_map = {
-            item['checkout_session__email'] or '': item['past_orders']
-            for item in paid
-        }
+        past_ids_map = defaultdict(list)
+        for email, order_id in paid:
+            past_ids_map[email or ''].append(order_id)
+        self.past_ids_map = dict(past_ids_map)
         return qs.order_by('-created')
 
 
