@@ -1,18 +1,23 @@
 """Tests for the admin order endpoints.
 
-The detail endpoint reuses OrderListSerializer, whose past_orders field
-reads state that only the list view prepares. That made every
-GET /api/orders/<order_id>/ request fail, and there was no test to catch
-it, so these cover both views against the same serializer.
-"""
-from decimal import Decimal
+The detail endpoint reuses OrderListSerializer, whose past_orders field reads
+state that only the list view prepares. That made every
+GET /api/orders/<order_id>/ request fail, and there was no test to catch it,
+so these cover both views against the same serializer.
 
-import unittest
+Everything here runs on any database. The list view used to aggregate past
+orders with ArrayAgg, so its test was skipped outside Postgres — and that gap
+is how a broken prefetch path reached production. The aggregation is done in
+Python now, so there is nothing left to skip.
+"""
+from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -76,12 +81,6 @@ class AdminOrderEndpointTest(TestCase):
 
         self.assertEqual(response.data['past_orders'], [])
 
-    @unittest.skipUnless(
-        connection.vendor == 'postgresql',
-        "OrderListView aggregates past orders with ArrayAgg, which only "
-        "exists on Postgres; the test settings use SQLite so this path "
-        "cannot be exercised in CI.",
-    )
     def test_order_list_still_populates_past_orders(self):
         first = self.make_order(email='repeat@example.com')
         self.make_order(email='repeat@example.com')
@@ -266,3 +265,80 @@ class OrderQuerysetPrefetchTests(TestCase):
         """They had a copy each, and both copies carried the same typo."""
         self.assertIs(OrderListView.get_queryset.__globals__['ORDER_PREFETCH_RELATED'],
                       OrderDetailView.get_queryset.__globals__['ORDER_PREFETCH_RELATED'])
+
+
+class OrderListIdsFilterTests(TestCase):
+    """
+    ?ids= fetches exactly the orders staff ticked.
+
+    The production-totals screen lets them select orders from any page of the
+    table, so the date range they happen to be browsing must not drop one of
+    them from the totals they are about to bake to.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        user = get_user_model().objects.create_superuser(
+            email='admin@example.com', password='pw'
+        )
+        token = RefreshToken.for_user(user).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        self.box = make_product('Box of 9', '14.99')
+
+    def make_order(self, email, created=None):
+        cart = Cart.objects.create(session_id=f'ids-{email}-{Order.objects.count()}')
+        CartItem.objects.create(cart=cart, product=self.box, quantity=1)
+        session = CheckoutSession.objects.create(cart=cart, email=email)
+        session.payment_status = 'paid'
+        session.save()
+        order = Order.objects.create(checkout_session=session)
+        if created:
+            Order.objects.filter(pk=order.pk).update(created=created)
+            order.refresh_from_db()
+        return order
+
+    def test_returns_only_the_requested_orders(self):
+        wanted = self.make_order('a@example.com')
+        self.make_order('b@example.com')
+
+        response = self.client.get(f'/api/orders/?ids={wanted.order_id}')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([o['order_id'] for o in response.data], [wanted.order_id])
+
+    def test_reaches_past_the_default_date_window(self):
+        """Without this the totals would quietly omit an older order that was
+        ticked from a filtered page — the worst kind of wrong for a batch
+        somebody is about to make."""
+        old = self.make_order('old@example.com', created=timezone.now() - timedelta(days=90))
+
+        response = self.client.get(f'/api/orders/?ids={old.order_id}')
+
+        self.assertEqual([o['order_id'] for o in response.data], [old.order_id])
+
+    def test_ignores_ids_that_do_not_exist(self):
+        real = self.make_order('real@example.com')
+
+        response = self.client.get(f'/api/orders/?ids={real.order_id},CP99-ZZZZ')
+
+        self.assertEqual([o['order_id'] for o in response.data], [real.order_id])
+
+    def test_caps_how_many_can_be_asked_for_at_once(self):
+        """Each one carries its whole object graph, so an unbounded list is a
+        way to ask the database for the entire year in one request."""
+        from orders.views import MAX_ORDER_IDS
+
+        ids = ','.join(f'CP26-{n:04d}' for n in range(MAX_ORDER_IDS + 50))
+        response = self.client.get(f'/api/orders/?ids={ids}')
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_still_populates_past_orders(self):
+        """The ids branch must not skip the prefetch the serializer needs, or
+        every row costs an extra query."""
+        first = self.make_order('repeat@example.com')
+        second = self.make_order('repeat@example.com')
+
+        response = self.client.get(f'/api/orders/?ids={second.order_id}')
+
+        self.assertEqual(response.data[0]['past_orders'], [first.order_id])
