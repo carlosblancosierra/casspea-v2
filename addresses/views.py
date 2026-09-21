@@ -1,12 +1,19 @@
+from datetime import timedelta
+
 from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .models import Address
+from .phones import normalise_uk_mobile, split_name
 from .serializers import AddressSerializer
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from checkout.models import CheckoutSession
 from rest_framework.views import APIView
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.renderers import BaseRenderer, BrowsableAPIRenderer, JSONRenderer
 from rest_framework.permissions import IsAdminUser
+from users.authentication import CustomJWTAuthentication
 from collections import Counter
 import csv
 
@@ -208,7 +215,10 @@ class PostalCodeStatsView(APIView):
         postcode_counts = Counter(postcodes)
 
         # Check if CSV format is requested
-        if request.query_params.get('format') == 'csv':
+        # Keyed off the negotiated renderer so both `?format=csv` and an
+        # `Accept: text/csv` request get a real CSV rather than a dict handed
+        # to a renderer that cannot serialise it.
+        if getattr(request.accepted_renderer, 'format', None) == 'csv':
             # Create CSV response
             response = HttpResponse(content_type='text/csv')
             response['Content-Disposition'] = 'attachment; filename="postal_code_stats.csv"'
@@ -224,3 +234,134 @@ class PostalCodeStatsView(APIView):
             # Return as a list of dicts for easier frontend use
             result = [{"postcode": k, "count": v} for k, v in postcode_counts.items()]
             return Response(result)
+
+
+# How far back "new" reaches, in days.
+SMS_NEW_WINDOW_DAYS = 30
+
+# Mailchimp's SMS import expects the number in E.164 plus a name pair.
+SMS_CSV_HEADER = ['Phone', 'First Name', 'Last Name']
+
+
+def collect_sms_contacts():
+    """Every distinct UK mobile we hold, newest first.
+
+    Addresses are written one row per checkout attempt - up to two (shipping
+    and billing) each time, and nothing deduplicates them - so counting rows
+    would badly over-count. We group by the normalised number instead.
+
+    Each contact is {'phone', 'first_name', 'last_name', 'first_seen'}, where
+    first_seen is the earliest row carrying that number. Normalisation cannot
+    be expressed in SQL, so the grouping happens in Python over a full scan of
+    the rows that have a phone at all. There is no index on `phone`; at this
+    shop's row count the scan is cheap, and an index would only help if the
+    table grew by orders of magnitude.
+    """
+    rows = (
+        Address.objects
+        .exclude(phone__isnull=True)
+        .exclude(phone__exact='')
+        .values('phone', 'first_name', 'last_name', 'full_name', 'created')
+        .order_by('created')
+        .iterator()
+    )
+
+    contacts = {}
+    for row in rows:
+        number = normalise_uk_mobile(row['phone'])
+        if not number:
+            continue
+
+        first, last = split_name(row['first_name'], row['last_name'], row['full_name'])
+        existing = contacts.get(number)
+        if existing is None:
+            contacts[number] = {
+                'phone': number,
+                'first_name': first,
+                'last_name': last,
+                'first_seen': row['created'],
+            }
+        elif first or last:
+            # Oldest first, so first_seen is already the earliest row and the
+            # last name we see is the most recent one the customer gave us.
+            # Never overwrite a name with a blank.
+            existing['first_name'] = first
+            existing['last_name'] = last
+
+    return sorted(contacts.values(), key=lambda c: c['first_seen'], reverse=True)
+
+
+class CsvRenderer(BaseRenderer):
+    """Makes `?format=csv` reach the handler.
+
+    DRF resolves the `format` query parameter against the view's renderers in
+    content negotiation, which runs *before* the handler - so a view that has
+    no renderer declaring format='csv' answers `?format=csv` with a 404 and
+    never writes a byte of CSV. The handler returns a plain HttpResponse,
+    which DRF passes through untouched, so render() is never reached in
+    practice; it exists so the format is negotiable at all.
+    """
+    media_type = 'text/csv'
+    format = 'csv'
+    charset = 'utf-8'
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+
+
+class SmsContactsView(APIView):
+    """Mobile numbers held, for SMS campaigns.
+
+    Superuser only - it is a bulk export of customer PII.
+    """
+    permission_classes = [IsAdminUser]
+    authentication_classes = [CustomJWTAuthentication, SessionAuthentication]
+    # JSON first, so it stays the default when no format is asked for.
+    renderer_classes = [JSONRenderer, BrowsableAPIRenderer, CsvRenderer]
+
+    @extend_schema(
+        summary="Mobile numbers for SMS campaigns",
+        description=(
+            "Distinct UK mobile numbers across all saved addresses, with the "
+            "count first seen in the last 30 days. `?format=csv` returns a "
+            "Mailchimp-shaped CSV instead of JSON."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='format',
+                description="Set to 'csv' to download instead of returning JSON.",
+                required=False,
+                type=str,
+            )
+        ],
+    )
+    def get(self, request):
+        if not request.user.is_superuser:
+            return Response({'detail': 'Not authorized.'}, status=403)
+
+        contacts = collect_sms_contacts()
+
+        if request.query_params.get('format') == 'csv':
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="sms_contacts.csv"'
+            writer = csv.writer(response)
+            writer.writerow(SMS_CSV_HEADER)
+            for contact in contacts:
+                writer.writerow([
+                    contact['phone'],
+                    contact['first_name'],
+                    contact['last_name'],
+                ])
+            return response
+
+        # "New" counts numbers we had never seen before the window opened, not
+        # rows written inside it: a repeat customer re-entering the same number
+        # is not a new contact to text.
+        cutoff = timezone.now() - timedelta(days=SMS_NEW_WINDOW_DAYS)
+        new_last_30_days = sum(1 for c in contacts if c['first_seen'] >= cutoff)
+
+        return Response({
+            'total': len(contacts),
+            'new_last_30_days': new_last_30_days,
+            'contacts': contacts,
+        })
