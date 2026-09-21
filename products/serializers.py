@@ -5,7 +5,10 @@ from .models import Product, ProductCategory, ProductGalleryImage
 class ProductCategoryShallowSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductCategory
-        fields = ['id', 'name', 'slug']  # Only the essentials
+        # The essentials, plus the category image: it is the fallback artwork
+        # for a box upgraded to an indulgence pack, and a product payload is
+        # the only place the storefront ever sees its category.
+        fields = ['id', 'name', 'slug', 'image', 'image_webp']
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -77,6 +80,14 @@ class ProductSerializer(serializers.ModelSerializer):
             'disable_flavour_selection',
             'block_discount_codes',
             'compare_at_price',
+            'badge_text',
+            'badge_color',
+            'badge_active',
+            'featured',
+            'wide_image',
+            'wide_image_webp',
+            'indulgence_image',
+            'indulgence_image_webp',
             'custom_options',
             'created',
             'updated'

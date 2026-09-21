@@ -116,6 +116,43 @@ class Product(models.Model):
         help_text="Original price to show struck through (e.g. the pre-discount price)."
     )
 
+    # A small merchandising label ("Best seller", "Top pick") that the shop can
+    # switch on per product. badge_active is separate from badge_text so the
+    # wording survives being turned off and back on.
+    BADGE_SLATE = 'slate'
+    BADGE_GREEN = 'green'
+    BADGE_AMBER = 'amber'
+    BADGE_ROSE = 'rose'
+    BADGE_VIOLET = 'violet'
+    BADGE_COLOR_CHOICES = [
+        (BADGE_SLATE, 'Slate'),
+        (BADGE_GREEN, 'Green'),
+        (BADGE_AMBER, 'Amber'),
+        (BADGE_ROSE, 'Rose'),
+        (BADGE_VIOLET, 'Violet'),
+    ]
+
+    badge_text = models.CharField(
+        max_length=24, blank=True, default='',
+        help_text='Short label shown on the product card, e.g. "Best seller".'
+    )
+    badge_color = models.CharField(
+        max_length=16, choices=BADGE_COLOR_CHOICES, default=BADGE_SLATE,
+        help_text="Badge background. The five presets are the ones that stay "
+                  "readable with white text; a free colour is how you end up "
+                  "with white on yellow."
+    )
+    badge_active = models.BooleanField(
+        default=False,
+        help_text="Show the badge. Turning this off keeps the wording for later."
+    )
+
+    featured = models.BooleanField(
+        default=False,
+        help_text="Give this product the full width of the grid on phones. "
+                  "Needs a wide image, or it falls back to a normal card."
+    )
+
     custom_options = models.JSONField(
         default=list,
         blank=True,
@@ -145,6 +182,39 @@ class Product(models.Model):
     thumbnail_webp = models.ImageField(
         upload_to='products/thumbnails/%Y/%m/',
         help_text="Thumbnail image (WebP)",
+        blank=True,
+        null=True
+    )
+
+    # A 2:1 crop for the featured card. At double width a square image would
+    # also be double height, and the featured card has to match the height of
+    # the cards beside it — hence a separate image rather than a CSS crop.
+    wide_image = models.ImageField(
+        upload_to='products/wide',
+        storage=s3_storage,
+        help_text="Wide (roughly 2:1) image for the featured card",
+        null=True,
+        blank=True
+    )
+    wide_image_webp = models.ImageField(
+        upload_to='products/wide/%Y/%m/',
+        help_text="WebP version of the wide image",
+        blank=True,
+        null=True
+    )
+
+    # Shown once a box is upgraded to an indulgence pack. Falls back to the
+    # indulgence-packs category image when a product has none of its own.
+    indulgence_image = models.ImageField(
+        upload_to='products/indulgence',
+        storage=s3_storage,
+        help_text="Image shown when this box is made into an indulgence pack",
+        null=True,
+        blank=True
+    )
+    indulgence_image_webp = models.ImageField(
+        upload_to='products/indulgence/%Y/%m/',
+        help_text="WebP version of the indulgence image",
         blank=True,
         null=True
     )
@@ -225,21 +295,25 @@ class Product(models.Model):
 
     def save(self, *args, **kwargs):
         # Check if this is a new instance or if the image has changed
-        if self.pk:
-            original = Product.objects.get(pk=self.pk)
-            if original.image != self.image and self.image:
-                # Create WebP version of main image
-                self.create_webp_version(self.image, self.image_webp)
-                # Create thumbnail and its WebP version
-                self.create_thumbnail(self.image, self.thumbnail)
-                self.create_webp_version(self.thumbnail, self.thumbnail_webp, is_thumbnail=True)
-        else:
-            if self.image:
-                # Create WebP version of main image
-                self.create_webp_version(self.image, self.image_webp)
-                # Create thumbnail and its WebP version
-                self.create_thumbnail(self.image, self.thumbnail)
-                self.create_webp_version(self.thumbnail, self.thumbnail_webp, is_thumbnail=True)
+        original = Product.objects.filter(pk=self.pk).first() if self.pk else None
+
+        if (original is None or original.image != self.image) and self.image:
+            # Create WebP version of main image
+            self.create_webp_version(self.image, self.image_webp)
+            # Create thumbnail and its WebP version
+            self.create_thumbnail(self.image, self.thumbnail)
+            self.create_webp_version(self.thumbnail, self.thumbnail_webp, is_thumbnail=True)
+
+        # The wide and indulgence images get a WebP twin too, but no thumbnail:
+        # neither is ever rendered small enough for one to be worth serving.
+        for source, webp in (
+            ('wide_image', 'wide_image_webp'),
+            ('indulgence_image', 'indulgence_image_webp'),
+        ):
+            image_field = getattr(self, source)
+            changed = original is None or getattr(original, source) != image_field
+            if changed and image_field:
+                self.create_webp_version(image_field, getattr(self, webp))
 
         super().save(*args, **kwargs)
 
@@ -253,6 +327,14 @@ class Product(models.Model):
             self.thumbnail.delete()
         if self.thumbnail_webp:
             self.thumbnail_webp.delete()
+        if self.wide_image:
+            self.wide_image.delete()
+        if self.wide_image_webp:
+            self.wide_image_webp.delete()
+        if self.indulgence_image:
+            self.indulgence_image.delete()
+        if self.indulgence_image_webp:
+            self.indulgence_image_webp.delete()
         super().delete(*args, **kwargs)
 
     @property
