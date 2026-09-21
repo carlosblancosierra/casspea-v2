@@ -247,3 +247,51 @@ class FreeDeliveryThresholdTests(TestCase):
         pricing = tracked.pricing_for_cart_total(Decimal('500.00'))
 
         self.assertEqual(pricing['discounted_price'], Decimal('0.00'))
+
+
+class FlagGuaranteedMigrationTests(TestCase):
+    """
+    The fixture already ships guaranteed=True, so it cannot prove the
+    migration fixes a live database — which is the only place the flag is
+    still False. This puts the rows back the way production holds them after
+    0006 and runs the migration's own function over them.
+    """
+
+    fixtures = ['initial_shipping.json']
+
+    def setUp(self):
+        # Reintroduce the state 0006 leaves behind: the field exists and
+        # nothing is flagged.
+        ShippingOption.objects.update(guaranteed=False)
+
+    def _run_migration(self):
+        from importlib import import_module
+        from django.apps import apps
+        module = import_module('shipping.migrations.0009_flag_special_delivery_guaranteed')
+        module.flag_guaranteed_services(apps, None)
+
+    def test_flags_the_next_day_service(self):
+        self._run_migration()
+
+        self.assertTrue(ShippingOption.objects.get(name='Next Day Guaranteed').guaranteed)
+
+    def test_leaves_the_tracked_services_as_estimates(self):
+        """Flagging everything would be worse than flagging nothing: it would
+        turn every estimate into a promise the carrier has not made."""
+        self._run_migration()
+
+        for name in ('Priority 24', 'Regular 48'):
+            with self.subTest(option=name):
+                self.assertFalse(ShippingOption.objects.get(name=name).guaranteed)
+
+    def test_matches_on_speed_rather_than_name(self):
+        """The name is editable in admin; renaming the service must not
+        silently turn its guarantee back into an estimate."""
+        option = ShippingOption.objects.get(delivery_speed='NEXT_DAY')
+        option.name = 'Special Delivery Guaranteed by 1pm'
+        option.save(update_fields=['name'])
+
+        self._run_migration()
+
+        option.refresh_from_db()
+        self.assertTrue(option.guaranteed)
