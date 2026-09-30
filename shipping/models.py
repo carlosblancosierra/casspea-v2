@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.conf import settings
@@ -69,6 +70,26 @@ class ShippingOption(models.Model):
 
     def __str__(self):
         return f"{self.company.name} - {self.name}"
+
+    def clean(self):
+        """A guarantee and a range cannot both be true.
+
+        The checkout reads min == max as "the carrier named one day", so a
+        guaranteed option carrying a range renders as "guaranteed to arrive
+        between Thursday and Friday" — which promises and hedges in the same
+        sentence. Migration 0007 produced exactly that state by widening rows
+        before 0009 set the flag, so this is worth refusing at the model rather
+        than trusting the data to stay right.
+        """
+        super().clean()
+        if self.guaranteed and self.estimated_days_min != self.estimated_days_max:
+            raise ValidationError({
+                'estimated_days_max': (
+                    "A guaranteed service arrives on one named day, so the "
+                    "minimum and maximum must match. Either set them equal or "
+                    "untick 'guaranteed'."
+                ),
+            })
 
     def pricing_for_cart_total(self, cart_total):
         """Single source of truth for this option's price and the cart-total discount.
