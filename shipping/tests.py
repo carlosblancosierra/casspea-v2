@@ -295,3 +295,104 @@ class FlagGuaranteedMigrationTests(TestCase):
 
         option.refresh_from_db()
         self.assertTrue(option.guaranteed)
+
+
+class NarrowGuaranteedEstimatesMigrationTests(TestCase):
+    """
+    0010 undoes what 0007 did to Special Delivery.
+
+    0007 guarded on `guaranteed=False`, but 0009 is what sets that flag and it
+    runs two migrations later — so on a real database every row was False when
+    0007 ran and the guaranteed service got widened with the rest.
+
+    WidenEstimateRangesMigrationTests asserts 0007 leaves it alone, and passes,
+    because the fixture already ships guaranteed=True. That is precisely how
+    this reached production: the test proved the intent against data where the
+    flag was set, while the live rows had it False. So these tests run the real
+    sequence instead.
+    """
+
+    fixtures = ['initial_shipping.json']
+
+    def _run(self, name):
+        from importlib import import_module
+        from django.apps import apps
+        # The module names start with a digit, so no plain import statement.
+        module = import_module(f'shipping.migrations.{name}')
+        return module
+
+    def _replay_production_sequence(self):
+        """0006 leaves nothing flagged; then 0007 widens; then 0009 flags."""
+        ShippingOption.objects.update(guaranteed=False)
+        for option in ShippingOption.objects.all():
+            option.estimated_days_max = option.estimated_days_min
+            option.save(update_fields=['estimated_days_max'])
+
+        from django.apps import apps
+        self._run('0007_widen_estimate_ranges').widen_estimate_ranges(apps, None)
+        self._run('0009_flag_special_delivery_guaranteed').flag_guaranteed_services(apps, None)
+
+    def test_the_real_migration_order_does_widen_the_guaranteed_service(self):
+        """The bug, pinned. If this ever stops holding, 0010 is unnecessary."""
+        self._replay_production_sequence()
+
+        option = ShippingOption.objects.get(delivery_speed='NEXT_DAY')
+        self.assertTrue(option.guaranteed)
+        self.assertNotEqual(option.estimated_days_min, option.estimated_days_max)
+
+    def test_it_narrows_the_guaranteed_service_back_to_one_day(self):
+        from django.apps import apps
+        self._replay_production_sequence()
+
+        self._run('0010_narrow_guaranteed_estimates').narrow_guaranteed_estimates(apps, None)
+
+        option = ShippingOption.objects.get(delivery_speed='NEXT_DAY')
+        self.assertEqual(option.estimated_days_min, 1)
+        self.assertEqual(option.estimated_days_max, 1)
+
+    def test_it_leaves_the_estimated_services_alone(self):
+        """Narrowing those would put back the single date 0007 existed to
+        remove — a promise Royal Mail has not made."""
+        from django.apps import apps
+        self._replay_production_sequence()
+
+        self._run('0010_narrow_guaranteed_estimates').narrow_guaranteed_estimates(apps, None)
+
+        self.assertEqual(ShippingOption.objects.get(name='Regular 48').estimated_days_max, 3)
+
+    def test_it_is_safe_to_run_twice(self):
+        from django.apps import apps
+        module = self._run('0010_narrow_guaranteed_estimates')
+        self._replay_production_sequence()
+
+        module.narrow_guaranteed_estimates(apps, None)
+        module.narrow_guaranteed_estimates(apps, None)
+
+        option = ShippingOption.objects.get(delivery_speed='NEXT_DAY')
+        self.assertEqual(option.estimated_days_max, 1)
+
+
+class GuaranteedAndRangeCannotDisagreeTests(TestCase):
+    """A guarantee and a range in the same row read as "guaranteed to arrive
+    between Thursday and Friday" — a promise and a hedge in one sentence."""
+
+    fixtures = ['initial_shipping.json']
+
+    def test_a_guaranteed_option_with_a_range_is_refused(self):
+        from django.core.exceptions import ValidationError
+
+        option = ShippingOption.objects.get(delivery_speed='NEXT_DAY')
+        option.estimated_days_max = option.estimated_days_min + 1
+
+        with self.assertRaises(ValidationError):
+            option.full_clean()
+
+    def test_an_estimated_option_may_carry_a_range(self):
+        option = ShippingOption.objects.get(name='Regular 48')
+
+        option.full_clean()  # does not raise
+
+    def test_a_guaranteed_option_with_one_day_is_accepted(self):
+        option = ShippingOption.objects.get(delivery_speed='NEXT_DAY')
+
+        option.full_clean()  # does not raise
