@@ -7,6 +7,7 @@ from decimal import Decimal
 from unittest import mock
 
 import stripe
+from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase, override_settings
 
 from orders.models import Order
@@ -279,3 +280,108 @@ class StripeWebhookTest(TestCase):
         self.assertEqual(response.status_code, 200)
         cart_item = self.cart.items.get()
         self.assertEqual(cart_item.quantity, 3)
+
+
+class FixedDispatchBlocksPickupTest(TestCase):
+    """A batch posted on a named day is the opposite of coming to fetch it.
+
+    The checkout does not offer collection for such a cart, but a control the UI
+    hides is not a rule. These tests are about the rule.
+    """
+
+    def setUp(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        self.cart = Cart.objects.create(session_id='fixed-dispatch-session')
+        self.calendar = make_product('Advent Calendar', '49.99')
+        self.calendar.fixed_dispatch_date = timezone.localdate() + timedelta(days=30)
+        self.calendar.save(update_fields=['fixed_dispatch_date'])
+        self.box = make_product('Box of 9', '14.99')
+
+        company, _ = ShippingCompany.objects.get_or_create(
+            code='test-courier', defaults={'name': 'Test Courier'}
+        )
+        self.pickup = ShippingOption.objects.create(
+            company=company,
+            name='Store pickup',
+            delivery_speed='PICKUP',
+            price=Decimal('0.00'),
+            estimated_days_min=0,
+            estimated_days_max=0,
+        )
+        self.shipping = make_shipping_option('5.99')
+
+    def accepts(self, option):
+        """Put the real serializer through its real validate().
+
+        Reimplementing the rule here would produce a test that passes while the
+        serializer is broken, so this builds what it needs instead: a request
+        carrying the cart's session, and an address owned by that session, since
+        the address checks run before the one under test.
+        """
+        from rest_framework.test import APIRequestFactory
+        from django.contrib.sessions.backends.db import SessionStore
+
+        from addresses.models import Address
+        from checkout.serializers import CheckoutDetailsSerializer
+
+        store = SessionStore()
+        store.create()
+        self.cart.session_id = store.session_key
+        self.cart.save(update_fields=['session_id'])
+
+        address = Address.objects.create(
+            address_type=Address.AddressType.SHIPPING_ADDRESS,
+            street_address='1 Test Street',
+            city='London',
+            postcode='SW12 9HR',
+            session_key=store.session_key,
+        )
+
+        request = APIRequestFactory().post('/api/checkout/details/')
+        request.session = store
+        request.user = AnonymousUser()
+
+        session = CheckoutSession.objects.create(cart=self.cart, email='g@example.com')
+        serializer = CheckoutDetailsSerializer(
+            session,
+            data={'shipping_address_id': address.id, 'shipping_option_id': option.id},
+            context={'request': request},
+        )
+        return serializer.is_valid(), serializer.errors
+
+    def test_pickup_is_refused_when_the_cart_holds_a_fixed_dispatch_item(self):
+        CartItem.objects.create(cart=self.cart, product=self.calendar, quantity=1)
+
+        valid, errors = self.accepts(self.pickup)
+
+        self.assertFalse(valid)
+        self.assertIn('shipping_option_id', errors)
+        self.assertIn('cannot be collected', str(errors['shipping_option_id']))
+
+    def test_pickup_is_fine_for_an_ordinary_cart(self):
+        CartItem.objects.create(cart=self.cart, product=self.box, quantity=1)
+
+        valid, errors = self.accepts(self.pickup)
+
+        self.assertTrue(valid, errors)
+
+    def test_shipping_is_always_fine(self):
+        CartItem.objects.create(cart=self.cart, product=self.calendar, quantity=1)
+
+        valid, errors = self.accepts(self.shipping)
+
+        self.assertTrue(valid, errors)
+
+    def test_a_past_fixed_date_does_not_block_pickup(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        self.calendar.fixed_dispatch_date = timezone.localdate() - timedelta(days=1)
+        self.calendar.save(update_fields=['fixed_dispatch_date'])
+        CartItem.objects.create(cart=self.cart, product=self.calendar, quantity=1)
+
+        valid, errors = self.accepts(self.pickup)
+
+        self.assertTrue(valid, errors)

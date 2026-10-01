@@ -337,6 +337,14 @@ class CartUpdateSerializer(serializers.ModelSerializer):
         discount_code = validated_data.pop('discount_code', None)
         _ = validated_data.pop('remove_discount', None)  # handled in view
 
+        # A cart holding a fixed-dispatch product does not get to choose its
+        # posting day — the advent calendars leave as one batch. The checkout
+        # hides the picker, but hiding a control is not a rule: anything that
+        # posts here has the date overwritten rather than trusted.
+        forced = instance.fixed_dispatch_date
+        if forced:
+            validated_data['shipping_date'] = forced
+
         if discount_code is not None:
             if discount_code == '':
                 instance.discount = None

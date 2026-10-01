@@ -94,6 +94,21 @@ class Product(models.Model):
     preorder_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     preorder_finish_date = models.DateField(null=True, blank=True)
 
+    # A seasonal batch that leaves on one named day — the advent calendars go
+    # out together so they arrive before 1 December. Set it and the checkout
+    # stops asking two questions it has no business asking: a cart holding one
+    # cannot be collected in store, and cannot choose its own posting date.
+    #
+    # One field rather than a date plus a "no pickup" flag. An item that must be
+    # *posted* on a named day is not an item you collect, so the date is the
+    # reason; a second flag could only disagree with it.
+    fixed_dispatch_date = models.DateField(
+        null=True, blank=True,
+        help_text="Post this product on this exact day (e.g. an advent calendar "
+                  "batch). A cart containing it cannot be collected in store and "
+                  "cannot pick its own posting date. Clear it to go back to normal."
+    )
+
     pickup_only = models.BooleanField(default=False, help_text="Product can only be picked up in person")
     pickup_from_date = models.DateField(null=True, blank=True, help_text="Date from which pickup becomes available")
     alert_message = models.CharField(max_length=255, null=True, blank=True,
