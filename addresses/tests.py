@@ -15,6 +15,9 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from carts.models import Cart
+from checkout.models import CheckoutSession
+
 from .models import Address
 from .phones import normalise_uk_mobile, split_name
 from .views import collect_sms_contacts
@@ -36,6 +39,25 @@ def make_address(phone, created=None, **kwargs):
         Address.objects.filter(pk=address.pk).update(created=created)
         address.refresh_from_db()
     return address
+
+
+def make_checkout(address, email=None, user=None, created=None):
+    """Attach an email to an address the only way the data model allows.
+
+    Address has no email column; the email a customer gave is on the checkout
+    that used the address. A guest's sits in CheckoutSession.email, and a
+    logged-in customer's is nulled there by CheckoutSession.save and lives on
+    the cart's user instead.
+    """
+    cart = Cart.objects.create(user=user)
+    session = CheckoutSession.objects.create(
+        cart=cart,
+        shipping_address=address,
+        email=email,
+    )
+    if created is not None:
+        CheckoutSession.objects.filter(pk=session.pk).update(created=created)
+    return session
 
 
 class NormaliseUkMobileTest(TestCase):
@@ -138,16 +160,21 @@ class CollectSmsContactsTest(TestCase):
 
         self.assertEqual((contact['first_name'], contact['last_name']), ('Ada', 'Lovelace'))
 
-    def test_it_stays_a_single_query_however_many_rows(self):
-        """The scan is deliberately unindexed; it must not also be an N+1."""
+    def test_it_stays_a_fixed_number_of_queries_however_many_rows(self):
+        """The scan is deliberately unindexed; it must not also be an N+1.
+
+        Two queries, not one: the addresses, and one pass over the checkouts
+        to find the email attached to each. Neither grows with the row count.
+        """
         for i in range(10):
-            make_address(f'0770090{i:04d}')
+            address = make_address(f'0770090{i:04d}')
+            make_checkout(address, email=f'person{i}@example.com')
 
         with CaptureQueriesContext(connection) as queries:
             contacts = collect_sms_contacts()
 
         self.assertEqual(len(contacts), 10)
-        self.assertEqual(len(queries), 1)
+        self.assertEqual(len(queries), 2)
 
 
 class SmsContactsEndpointTest(TestCase):
@@ -223,8 +250,8 @@ class SmsContactsEndpointTest(TestCase):
         rows = [
             line for line in response.content.decode().splitlines() if line.strip()
         ]
-        self.assertEqual(rows[0], 'Phone,First Name,Last Name')
-        self.assertEqual(rows[1], '+447700900123,Ada,Lovelace')
+        self.assertEqual(rows[0], 'Phone,First Name,Last Name,Email')
+        self.assertEqual(rows[1], '+447700900123,Ada,Lovelace,')
         self.assertEqual(len(rows), 2)
 
     def test_csv_quotes_names_containing_commas(self):
@@ -234,3 +261,78 @@ class SmsContactsEndpointTest(TestCase):
         response = self.client.get(URL, {'format': 'csv'})
 
         self.assertIn('"Lovelace, Countess"', response.content.decode())
+
+
+class SmsContactEmailTest(TestCase):
+    """The export carries the email too, which Address itself does not hold."""
+
+    def test_a_guest_checkout_email_reaches_the_contact(self):
+        address = make_address('07700 900123', full_name='Ada Lovelace')
+        make_checkout(address, email='ada@example.com')
+
+        contact = collect_sms_contacts()[0]
+
+        self.assertEqual(contact['email'], 'ada@example.com')
+
+    def test_a_logged_in_customer_email_comes_from_the_user(self):
+        """CheckoutSession.save nulls `email` when the cart has a user, so
+        reading that field alone would lose every account holder's address."""
+        user = get_user_model().objects.create_user(
+            email='grace@example.com', password='pw'
+        )
+        address = make_address('07700 900123', full_name='Grace Hopper')
+        session = make_checkout(address, user=user)
+
+        self.assertIsNone(session.email)
+
+        contact = collect_sms_contacts()[0]
+        self.assertEqual(contact['email'], 'grace@example.com')
+
+    def test_a_contact_with_no_checkout_gets_a_blank_email(self):
+        """An SMS export: the phone is the key, so a missing email is not a
+        reason to drop the row."""
+        make_address('07700 900123')
+
+        contact = collect_sms_contacts()[0]
+
+        self.assertEqual(contact['email'], '')
+
+    def test_the_newest_email_wins_for_a_number_seen_twice(self):
+        now = timezone.now()
+        old = make_address('07700 900123', created=now - timedelta(days=60))
+        new = make_address('+44 7700 900123', created=now)
+        make_checkout(old, email='old@example.com', created=now - timedelta(days=60))
+        make_checkout(new, email='new@example.com', created=now)
+
+        contacts = collect_sms_contacts()
+
+        self.assertEqual(len(contacts), 1)
+        self.assertEqual(contacts[0]['email'], 'new@example.com')
+
+    def test_a_later_checkout_without_an_email_does_not_blank_one_we_have(self):
+        now = timezone.now()
+        address = make_address('07700 900123', created=now - timedelta(days=10))
+        make_checkout(address, email='ada@example.com', created=now - timedelta(days=10))
+
+        later = make_address('07700 900123', created=now)
+        self.assertIsNotNone(later)
+
+        contacts = collect_sms_contacts()
+
+        self.assertEqual(contacts[0]['email'], 'ada@example.com')
+
+    def test_the_csv_carries_the_email_column(self):
+        client = APIClient()
+        admin = get_user_model().objects.create_superuser(
+            email='admin@example.com', password='pw'
+        )
+        address = make_address('07700 900123', full_name='Ada Lovelace')
+        make_checkout(address, email='ada@example.com')
+
+        token = RefreshToken.for_user(admin).access_token
+        client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
+        response = client.get(URL, {'format': 'csv'})
+
+        rows = [line for line in response.content.decode().splitlines() if line.strip()]
+        self.assertEqual(rows[0], 'Phone,First Name,Last Name,Email')
+        self.assertEqual(rows[1], '+447700900123,Ada,Lovelace,ada@example.com')

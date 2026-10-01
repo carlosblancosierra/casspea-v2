@@ -24,8 +24,10 @@ class ProductGalleryImageInline(admin.TabularInline):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'base_price', 'active', 'sold_out', 'image_preview']
-    list_filter = ['category', 'active', 'sold_out']
+    list_display = ['name', 'category', 'base_price', 'active', 'sold_out',
+                    'badge_text', 'badge_active', 'featured', 'image_preview']
+    list_filter = ['category', 'active', 'sold_out', 'featured', 'badge_active']
+    list_editable = ['badge_active', 'featured']
     search_fields = ['name', 'description']
     inlines = [ProductGalleryImageInline]
     actions = ['mark_not_sold_out', 'mark_sold_out']

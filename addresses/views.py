@@ -239,8 +239,50 @@ class PostalCodeStatsView(APIView):
 # How far back "new" reaches, in days.
 SMS_NEW_WINDOW_DAYS = 30
 
-# Mailchimp's SMS import expects the number in E.164 plus a name pair.
-SMS_CSV_HEADER = ['Phone', 'First Name', 'Last Name']
+# Mailchimp's SMS import expects the number in E.164 plus a name pair. Email is
+# appended rather than put first: Mailchimp matches columns by name, so the
+# position does not matter to it, and appending cannot break an import mapping
+# someone has already saved.
+SMS_CSV_HEADER = ['Phone', 'First Name', 'Last Name', 'Email']
+
+
+def emails_by_address():
+    """Map address id -> the most recent email we hold for it.
+
+    Address has no email column, so the only place a customer's email is
+    attached to an address is the checkout that used it. Two cases, and both
+    matter:
+
+    - guest checkout keeps the address in CheckoutSession.email
+    - a logged-in customer's is deliberately None there (CheckoutSession.save
+      nulls it when the cart has a user), so it comes from cart.user.email
+
+    One query, ordered oldest first so later checkouts overwrite earlier ones
+    and the map ends up holding the newest email per address.
+    """
+    sessions = (
+        CheckoutSession.objects
+        .values(
+            'shipping_address_id',
+            'billing_address_id',
+            'email',
+            'cart__user__email',
+        )
+        .order_by('created')
+        .iterator()
+    )
+
+    emails = {}
+    for session in sessions:
+        email = session['email'] or session['cart__user__email'] or ''
+        if not email:
+            continue
+        for key in ('shipping_address_id', 'billing_address_id'):
+            address_id = session[key]
+            if address_id is not None:
+                emails[address_id] = email
+
+    return emails
 
 
 def collect_sms_contacts():
@@ -250,18 +292,23 @@ def collect_sms_contacts():
     and billing) each time, and nothing deduplicates them - so counting rows
     would badly over-count. We group by the normalised number instead.
 
-    Each contact is {'phone', 'first_name', 'last_name', 'first_seen'}, where
-    first_seen is the earliest row carrying that number. Normalisation cannot
-    be expressed in SQL, so the grouping happens in Python over a full scan of
-    the rows that have a phone at all. There is no index on `phone`; at this
-    shop's row count the scan is cheap, and an index would only help if the
-    table grew by orders of magnitude.
+    Each contact is {'phone', 'first_name', 'last_name', 'email',
+    'first_seen'}, where first_seen is the earliest row carrying that number.
+    Normalisation cannot be expressed in SQL, so the grouping happens in
+    Python over a full scan of the rows that have a phone at all. There is no
+    index on `phone`; at this shop's row count the scan is cheap, and an index
+    would only help if the table grew by orders of magnitude.
+
+    A contact with no email keeps an empty string. This is an SMS export - the
+    phone is the key, and a missing email is not a reason to drop a row.
     """
+    emails = emails_by_address()
+
     rows = (
         Address.objects
         .exclude(phone__isnull=True)
         .exclude(phone__exact='')
-        .values('phone', 'first_name', 'last_name', 'full_name', 'created')
+        .values('id', 'phone', 'first_name', 'last_name', 'full_name', 'created')
         .order_by('created')
         .iterator()
     )
@@ -273,20 +320,25 @@ def collect_sms_contacts():
             continue
 
         first, last = split_name(row['first_name'], row['last_name'], row['full_name'])
+        email = emails.get(row['id'], '')
         existing = contacts.get(number)
         if existing is None:
             contacts[number] = {
                 'phone': number,
                 'first_name': first,
                 'last_name': last,
+                'email': email,
                 'first_seen': row['created'],
             }
-        elif first or last:
+        else:
             # Oldest first, so first_seen is already the earliest row and the
-            # last name we see is the most recent one the customer gave us.
-            # Never overwrite a name with a blank.
-            existing['first_name'] = first
-            existing['last_name'] = last
+            # last value we see is the most recent one the customer gave us.
+            # Never overwrite something we have with a blank.
+            if first or last:
+                existing['first_name'] = first
+                existing['last_name'] = last
+            if email:
+                existing['email'] = email
 
     return sorted(contacts.values(), key=lambda c: c['first_seen'], reverse=True)
 
@@ -322,9 +374,10 @@ class SmsContactsView(APIView):
     @extend_schema(
         summary="Mobile numbers for SMS campaigns",
         description=(
-            "Distinct UK mobile numbers across all saved addresses, with the "
-            "count first seen in the last 30 days. `?format=csv` returns a "
-            "Mailchimp-shaped CSV instead of JSON."
+            "Distinct UK mobile numbers across all saved addresses, each with "
+            "the email from the most recent checkout that used the address, "
+            "and the count first seen in the last 30 days. `?format=csv` "
+            "returns a Mailchimp-shaped CSV instead of JSON."
         ),
         parameters=[
             OpenApiParameter(
@@ -351,6 +404,7 @@ class SmsContactsView(APIView):
                     contact['phone'],
                     contact['first_name'],
                     contact['last_name'],
+                    contact['email'],
                 ])
             return response
 
