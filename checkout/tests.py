@@ -110,6 +110,16 @@ class StripePayloadTest(TestCase):
         self.assertIn('success_url', payload)
         self.assertNotIn('ui_mode', payload)
 
+    def test_payload_does_not_send_payment_method_types(self):
+        """Stripe removed it from Checkout Session creation and now answers 400.
+
+        The methods on offer come from the Dashboard's payment-method settings.
+        """
+        self.assertNotIn('payment_method_types', prepare_stripe_payload(self.session))
+        self.assertNotIn(
+            'payment_method_types', prepare_stripe_payload(self.session, embedded=True)
+        )
+
     def test_embedded_payload_uses_return_url(self):
         payload = prepare_stripe_payload(self.session, embedded=True)
 
@@ -385,3 +395,89 @@ class FixedDispatchBlocksPickupTest(TestCase):
         valid, errors = self.accepts(self.pickup)
 
         self.assertTrue(valid, errors)
+
+
+class StripeHostedSessionTest(TestCase):
+    """What the hosted checkout actually sends to Stripe.
+
+    Payments went down because Stripe removed `payment_method_types` from
+    Checkout Session creation and started answering 400 to it. The parameter had
+    been there since the beginning and nothing exercised the kwargs this view
+    builds, so there was nothing to notice - prepare_stripe_payload is tested,
+    but this view does not use it. These drive the view itself with Stripe
+    mocked, and assert on the call.
+    """
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        from addresses.models import Address
+
+        self.client = APIClient()
+
+        # A guest checkout, which is how most orders arrive, and the only case
+        # that carries an email: CheckoutSession.save() clears email for a cart
+        # with a user, so Stripe collects it on its own page for those.
+        store = self.client.session
+        store.save()
+
+        self.cart = Cart.objects.create(session_id=store.session_key)
+        self.box = make_product('Box of 9', '14.99')
+        CartItem.objects.create(cart=self.cart, product=self.box, quantity=2)
+
+        address = Address.objects.create(
+            address_type=Address.AddressType.SHIPPING_ADDRESS,
+            street_address='1 Test Street',
+            city='London',
+            postcode='SW12 9HR',
+            session_key=store.session_key,
+        )
+        CheckoutSession.objects.create(
+            cart=self.cart,
+            email='buyer@example.com',
+            shipping_address=address,
+            shipping_option=make_shipping_option('5.99'),
+        )
+
+    def post(self):
+        """POST the real endpoint, returning the response and the Stripe mock."""
+        created = mock.Mock(
+            id='cs_test_123',
+            url='https://checkout.stripe.com/c/pay/cs_test_123',
+            amount_total=3597,
+        )
+        with mock.patch(
+            'checkout.stripe_views.stripe.checkout.Session.create',
+            return_value=created,
+        ) as create:
+            response = self.client.post('/api/checkout/stripe/create-session/')
+        return response, create
+
+    def test_it_returns_the_stripe_url(self):
+        response, create = self.post()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(create.called)
+        self.assertEqual(
+            response.data['url'], 'https://checkout.stripe.com/c/pay/cs_test_123'
+        )
+
+    def test_it_does_not_send_payment_method_types(self):
+        """Regression: sending it is a 400 from Stripe, i.e. nobody can pay."""
+        _, create = self.post()
+
+        self.assertNotIn('payment_method_types', create.call_args.kwargs)
+
+    def test_it_still_sends_everything_else(self):
+        """The parameter went; nothing travelling with it was meant to."""
+        _, create = self.post()
+        kwargs = create.call_args.kwargs
+
+        self.assertEqual(kwargs['mode'], 'payment')
+        self.assertEqual(kwargs['customer_email'], 'buyer@example.com')
+        self.assertEqual(len(kwargs['line_items']), 1)
+        self.assertEqual(kwargs['line_items'][0]['quantity'], 2)
+        self.assertEqual(
+            kwargs['shipping_options'][0]['shipping_rate_data']['fixed_amount']['amount'],
+            599,
+        )

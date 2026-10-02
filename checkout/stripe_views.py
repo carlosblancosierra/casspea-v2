@@ -161,8 +161,12 @@ class StripeCheckoutSessionView(APIView):
             shipping_options = [checkout_session.shipping_stripe_format]
 
             # Create Stripe checkout session
+            # No payment_method_types: Stripe removed the parameter from
+            # Checkout Session creation and now answers 400 if it is sent, which
+            # took the whole hosted checkout down. The methods on offer come from
+            # Dashboard -> Settings -> Payment methods (dynamic payment methods),
+            # so this is where they are *not* configured. Do not put it back.
             stripe_session = stripe.checkout.Session.create(
-                payment_method_types=['card'],
                 line_items=line_items,
                 customer_email=checkout_session.email,
                 currency='GBP',

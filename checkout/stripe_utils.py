@@ -47,8 +47,9 @@ def prepare_stripe_payload(checkout_session, embedded=False):
     FRONT = "www.casspea.co.uk"
     base = f"{PROT}://{FRONT}"
 
+    # No payment_method_types here either - same removal, same 400. The methods
+    # on offer come from the Stripe Dashboard's payment-method settings.
     payload = {
-        "payment_method_types": ["card"],
         "line_items": line_items,
         "customer_email": checkout_session.email,
         "currency": "GBP",
