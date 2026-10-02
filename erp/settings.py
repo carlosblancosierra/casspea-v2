@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     'royalmail',
     'personalized',
     'experiments',
+    'orders_mcp',
 ]
 
 MIDDLEWARE = [
@@ -551,3 +552,8 @@ SHIPPING_DISCOUNT_AMOUNT = '6.00'  # £ taken off each shipping option
 STORE_ORDER_DEADLINE = env('STORE_ORDER_DEADLINE', default='')
 # Human-readable date the shop reopens, surfaced in the "closed" messaging.
 STORE_REOPEN_LABEL = env('STORE_REOPEN_LABEL', default='1 September')
+
+# Shared secret for the read-only orders MCP server at /api/mcp/.
+# Empty disables the endpoint. Generate with:
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"
+MCP_API_TOKEN = env('MCP_API_TOKEN', default='')
