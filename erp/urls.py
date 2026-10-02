@@ -65,6 +65,7 @@ urlpatterns = [
     path('api/personalized/', include(personalized_urls)),
     path('api/discounts/', include(discounts_urls)),
     path('api/experiments/', include(experiments_urls)),
+    path('api/mcp/', include('orders_mcp.urls')),
 ]
 
 if settings.DEBUG and not settings.USE_S3:
