@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from django.conf import settings
 from products.models import Product, Allergen
 from flavours.models import Flavour
@@ -23,6 +24,32 @@ class Cart(models.Model):
     updated = models.DateTimeField(auto_now=True)
 
     objects = CartManager()
+
+    @property
+    def fixed_dispatch_date(self):
+        """The day this cart must be posted, or None if it is free to choose.
+
+        A product with fixed_dispatch_date set leaves on that exact day — the
+        advent calendars go out as one batch so they arrive before 1 December.
+        A cart holding one cannot be collected in store and cannot pick its own
+        posting date.
+
+        The EARLIEST such date wins in a mixed cart. Everything goes out
+        together, and the earliest is the safe direction: it is the one that
+        still arrives in time for whichever item is most urgent.
+
+        A date that has already passed is ignored. This is a seasonal setting
+        someone will forget to clear, and forcing a posting day in the past is
+        worse than asking the customer normally.
+        """
+        today = timezone.localdate()
+        dates = [
+            item.product.fixed_dispatch_date
+            for item in self.items.all()
+            if item.product.fixed_dispatch_date
+            and item.product.fixed_dispatch_date >= today
+        ]
+        return min(dates) if dates else None
 
     @property
     def base_total(self):

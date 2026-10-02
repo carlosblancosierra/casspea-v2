@@ -74,6 +74,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'current_price',
             'pickup_only',
             'pickup_from_date',
+            'fixed_dispatch_date',
             'alert_message',
             'is_pickup_available',
             'can_pick_allergens',

@@ -8,6 +8,10 @@ from addresses.models import Address
 from shipping.serializers import ShippingOptionSerializer
 from shipping.models import ShippingOption
 
+# Store collection, by what the service *is* rather than by the row's id, which
+# differs between environments.
+PICKUP_DELIVERY_SPEED = 'PICKUP'
+
 class CheckoutSessionSerializer(serializers.ModelSerializer):
     shipping_address = AddressSerializer(read_only=True)
     billing_address = AddressSerializer(read_only=True)
@@ -93,7 +97,7 @@ class CheckoutDetailsSerializer(serializers.ModelSerializer):
         shipping_option_id = data.get('shipping_option_id')
         if shipping_option_id:
             try:
-                ShippingOption.objects.get(
+                option = ShippingOption.objects.get(
                     id=shipping_option_id,
                     active=True,
                     company__active=True
@@ -102,6 +106,25 @@ class CheckoutDetailsSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "shipping_option_id": "Invalid shipping option ID"
                 })
+
+            # A cart holding a fixed-dispatch product cannot be collected: the
+            # advent calendars are posted as one batch on a named day, which is
+            # the opposite of coming to fetch it whenever. The checkout does not
+            # offer collection for such a cart, but a hidden control is not a
+            # rule — this is where it becomes one.
+            #
+            # Matched on delivery_speed rather than the option's id: the id is
+            # whatever that row happens to be in this environment, while the
+            # speed says what the service is.
+            if option.delivery_speed == PICKUP_DELIVERY_SPEED:
+                cart = self.instance.cart if self.instance else None
+                if cart and cart.fixed_dispatch_date:
+                    raise serializers.ValidationError({
+                        "shipping_option_id": (
+                            "Your order contains an item we post on a fixed day, "
+                            "so it cannot be collected in store."
+                        )
+                    })
 
         return data
 
