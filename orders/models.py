@@ -8,23 +8,36 @@ import random
 User = get_user_model()
 
 
+ORDER_ID_LENGTH = 5
+
+
 def generate_order_id():
     """Generate a unique order ID
-    Format: CPYY-XXXX where:
+    Format: CPYY-XXXXX where:
     - CPYY: CassPea prefix with year
-    - XXXX: Random 4-character alphanumeric string
-    Example: CP25-B4K9
+    - XXXXX: Random 5-character alphanumeric string
+    Example: CP26-B4K9X
+
+    Orders from before the switch to 5 characters keep their 4-character
+    IDs (CP25-B4K9); both share the same unique column, so a new ID can
+    never repeat an old one.
     """
     year = timezone.now().strftime("%y")
     prefix = f'CP{year}-'
 
-    # Generate a random 4-character string using letters and numbers,
-    # drawing again if it spells something rude (see orders/profanity.py)
-    random_str = get_random_string(length=4, allowed_chars=ORDER_ID_CHARS)
-    while is_offensive(random_str):
-        random_str = get_random_string(length=4, allowed_chars=ORDER_ID_CHARS)
-
-    return f'{prefix}{random_str}'
+    # Draw again if the code spells something rude (see orders/profanity.py)
+    # or is already taken. Checked here rather than in save(), because the
+    # field default fills order_id before save() ever sees it.
+    while True:
+        random_str = get_random_string(
+            length=ORDER_ID_LENGTH, allowed_chars=ORDER_ID_CHARS
+        )
+        order_id = f'{prefix}{random_str}'
+        if is_offensive(random_str):
+            continue
+        if Order.objects.filter(order_id=order_id).exists():
+            continue
+        return order_id
 
 
 class Order(models.Model):
@@ -103,11 +116,7 @@ class Order(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.order_id:
-            # Optionally, ensure uniqueness by looping
-            unique_id = generate_order_id()
-            while Order.objects.filter(order_id=unique_id).exists():
-                unique_id = generate_order_id()
-            self.order_id = unique_id
+            self.order_id = generate_order_id()
         super().save(*args, **kwargs)
 
 

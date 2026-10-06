@@ -26,7 +26,7 @@ from carts.models import Cart, CartItem
 from carts.tests.test_totals import make_product
 from checkout.models import CheckoutSession
 
-from .models import Order, generate_order_id
+from .models import ORDER_ID_LENGTH, Order, generate_order_id
 from .profanity import BLOCKED_WORDS, LOOKALIKES, ORDER_ID_CHARS, is_offensive
 from .views import (
     ORDER_PREFETCH_RELATED,
@@ -370,14 +370,60 @@ class OrderIdProfanityTests(TestCase):
         # longer than the code, is dead weight that only looks like cover.
         letters = set(ORDER_ID_CHARS) | set(ORDER_ID_CHARS.translate(LOOKALIKES))
         for word in BLOCKED_WORDS:
-            self.assertLessEqual(len(word), 4, word)
+            self.assertLessEqual(len(word), ORDER_ID_LENGTH, word)
             self.assertLessEqual(set(word), letters, word)
 
     def test_generate_order_id_draws_again_on_a_rude_code(self):
         with mock.patch(
             'orders.models.get_random_string',
-            side_effect=['PUTA', 'F4G5', 'B4K9'],
+            side_effect=['PUTAB', 'XF4G5', 'B4K9X'],
         ) as draw:
             order_id = generate_order_id()
-        self.assertTrue(order_id.endswith('-B4K9'))
+        self.assertTrue(order_id.endswith('-B4K9X'))
         self.assertEqual(draw.call_count, 3)
+
+
+class OrderIdUniquenessTests(TestCase):
+    """Two orders must never share an ID, and IDs issued before the switch
+    from 4 to 5 random characters must keep working."""
+
+    def setUp(self):
+        self.box = make_product('Box of 9', '14.99')
+
+    def make_session(self):
+        cart = Cart.objects.create(session_id=f'session-{Cart.objects.count()}')
+        CartItem.objects.create(cart=cart, product=self.box, quantity=1)
+        return CheckoutSession.objects.create(cart=cart, email='a@example.com')
+
+    def test_new_ids_have_five_random_characters(self):
+        order = Order.objects.create(checkout_session=self.make_session())
+        prefix, code = order.order_id.split('-')
+        self.assertEqual(prefix, f"CP{timezone.now():%y}")
+        self.assertEqual(len(code), ORDER_ID_LENGTH)
+        self.assertLessEqual(set(code), set(ORDER_ID_CHARS))
+
+    def test_a_taken_id_is_drawn_again_on_create(self):
+        """Regression: the uniqueness loop lived in save(), but the field
+        default had already filled order_id, so it never ran and a clash
+        reached the database as an IntegrityError in the Stripe webhook."""
+        year = f"{timezone.now():%y}"
+        with mock.patch('orders.models.get_random_string', return_value='B4K9X'):
+            first = Order.objects.create(checkout_session=self.make_session())
+        self.assertEqual(first.order_id, f'CP{year}-B4K9X')
+
+        with mock.patch(
+            'orders.models.get_random_string',
+            side_effect=['B4K9X', 'ZQ7HM'],
+        ):
+            second = Order.objects.create(checkout_session=self.make_session())
+        self.assertEqual(second.order_id, f'CP{year}-ZQ7HM')
+
+    def test_old_four_character_ids_still_load(self):
+        old = Order.objects.create(
+            checkout_session=self.make_session(), order_id='CP25-B4K9'
+        )
+        old.save()
+        self.assertEqual(Order.objects.get(order_id='CP25-B4K9').pk, old.pk)
+
+        new = Order.objects.create(checkout_session=self.make_session())
+        self.assertNotEqual(new.order_id, old.order_id)

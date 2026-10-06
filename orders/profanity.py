@@ -1,11 +1,11 @@
 """Keep rude words out of the random part of order IDs.
 
-The random part is four characters from ORDER_ID_CHARS. That alphabet has no
+The random part is five characters from ORDER_ID_CHARS. That alphabet has no
 I, O, 0 or 1, so any word needing an I or an O can never come out, and this
 list only carries words that can. Digits are read as the letters they look
 like (4 -> A, 5 -> S, ...) so "F4G5" counts as "FAGS". A code is rejected if
-any listed word appears anywhere in it, so a three-letter word also catches
-every code that contains it ("XFAG", "FAGX").
+any listed word appears anywhere in it, so a short word also catches every
+code that contains it ("XFAGX", "PUTAB").
 
 A rejected code costs nothing: generate_order_id just draws another one.
 False positives are cheap; a false negative ends up on a customer's receipt.
@@ -31,13 +31,14 @@ BLOCKED_WORDS = frozenset({
     'ANAL', 'ANUS', 'ARSE', 'ASS', 'BUTT', 'CRAP', 'CUM', 'CUNT', 'DAMN',
     'DYKE', 'FAG', 'FCK', 'FUC', 'FUK', 'FVCK', 'KKK', 'KUNT', 'MUFF',
     'NGGA', 'NGGR', 'NUDE', 'PEE', 'PUKE', 'RAPE', 'RTRD', 'SCAT', 'SEX',
-    'SHAG', 'SLAG', 'SLUT', 'SMEG', 'SPAC', 'SPAZ', 'STD', 'SUCK', 'TARD',
-    'TURD', 'TWAT', 'WANK', 'WTF', 'XXX',
+    'PUSSY', 'SHAG', 'SKANK', 'SLAG', 'SLUT', 'SMEG', 'SPAC', 'SPAZ',
+    'SPERM', 'STD', 'SUCK', 'TARD', 'TURD', 'TWAT', 'WANK', 'WTF', 'XXX',
     # Spanish
     'CACA', 'CAGA', 'CTM', 'HDP', 'LPM', 'MEAR', 'MRD', 'PAJA', 'PENE',
-    'PNDJ', 'PTA', 'PTM', 'PUTA', 'PUTE', 'PUTX', 'TETA', 'VRG',
+    'PERRA', 'PNDJ', 'PTA', 'PTM', 'PUTA', 'PUTE', 'PUTX', 'TETA', 'VERGA',
+    'VRG',
     # Other European languages a UK customer may read
-    'CAZZ', 'CUL', 'MRDE',
+    'ARSCH', 'CAZZ', 'CUL', 'MERDE', 'MRDE',
     # Numbers, checked as typed rather than as letters
     '666', '69',
 })
