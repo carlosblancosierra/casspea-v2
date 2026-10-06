@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.utils.crypto import get_random_string
 from django.utils import timezone
 from .managers import OrderManager
+from .profanity import ORDER_ID_CHARS, is_offensive
 import random
 User = get_user_model()
 
@@ -17,11 +18,11 @@ def generate_order_id():
     year = timezone.now().strftime("%y")
     prefix = f'CP{year}-'
 
-    # Generate a random 4-character string using letters and numbers
-    random_str = get_random_string(
-        length=4,
-        allowed_chars='23456789ABCDEFGHJKLMNPQRSTUVWXYZ'  # Excluding confusing chars like 0,1,I,O
-    )
+    # Generate a random 4-character string using letters and numbers,
+    # drawing again if it spells something rude (see orders/profanity.py)
+    random_str = get_random_string(length=4, allowed_chars=ORDER_ID_CHARS)
+    while is_offensive(random_str):
+        random_str = get_random_string(length=4, allowed_chars=ORDER_ID_CHARS)
 
     return f'{prefix}{random_str}'
 

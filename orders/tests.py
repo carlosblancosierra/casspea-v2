@@ -12,6 +12,7 @@ Python now, so there is nothing left to skip.
 """
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -25,7 +26,8 @@ from carts.models import Cart, CartItem
 from carts.tests.test_totals import make_product
 from checkout.models import CheckoutSession
 
-from .models import Order
+from .models import Order, generate_order_id
+from .profanity import BLOCKED_WORDS, LOOKALIKES, ORDER_ID_CHARS, is_offensive
 from .views import (
     ORDER_PREFETCH_RELATED,
     ORDER_SELECT_RELATED,
@@ -342,3 +344,40 @@ class OrderListIdsFilterTests(TestCase):
         response = self.client.get(f'/api/orders/?ids={second.order_id}')
 
         self.assertEqual(response.data[0]['past_orders'], [first.order_id])
+
+
+class OrderIdProfanityTests(TestCase):
+    """The random part of an order ID must never spell a rude word."""
+
+    def test_catches_words_in_english_and_spanish(self):
+        for code in ('PUTA', 'FUCK', 'CUNT', 'TWAT', 'CACA'):
+            self.assertTrue(is_offensive(code), code)
+
+    def test_catches_a_short_word_anywhere_in_the_code(self):
+        for code in ('XFAG', 'FAGX', 'ASSB', 'BPTA'):
+            self.assertTrue(is_offensive(code), code)
+
+    def test_reads_digits_as_the_letters_they_look_like(self):
+        for code in ('PUT4', 'F4G5', '5H4G', 'C4C4'):
+            self.assertTrue(is_offensive(code), code)
+
+    def test_lets_ordinary_codes_through(self):
+        for code in ('B4K9', 'ZQ7H', '2MPW', 'XYZ2'):
+            self.assertFalse(is_offensive(code), code)
+
+    def test_every_blocked_word_can_actually_come_out(self):
+        # A word that needs a character the alphabet can't produce, or is
+        # longer than the code, is dead weight that only looks like cover.
+        letters = set(ORDER_ID_CHARS) | set(ORDER_ID_CHARS.translate(LOOKALIKES))
+        for word in BLOCKED_WORDS:
+            self.assertLessEqual(len(word), 4, word)
+            self.assertLessEqual(set(word), letters, word)
+
+    def test_generate_order_id_draws_again_on_a_rude_code(self):
+        with mock.patch(
+            'orders.models.get_random_string',
+            side_effect=['PUTA', 'F4G5', 'B4K9'],
+        ) as draw:
+            order_id = generate_order_id()
+        self.assertTrue(order_id.endswith('-B4K9'))
+        self.assertEqual(draw.call_count, 3)
