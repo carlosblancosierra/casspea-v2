@@ -169,6 +169,21 @@ class StripePayloadTest(TestCase):
         payload = prepare_stripe_payload(self.session)
         self.assertEqual(payload['discounts'], [])
 
+    def test_discount_covering_nothing_in_cart_is_not_sent_to_stripe(self):
+        """Stripe rejects the whole session with coupon_applies_to_nothing
+        when the coupon covers none of the line items (e.g. a cart holding
+        only an advent calendar)."""
+        discount = Discount.objects.create(
+            title='Ten', code='TEN', stripe_id='stripe_TEN',
+            discount_type=Discount.PERCENTAGE, amount=Decimal('10.00'),
+        )
+        discount.exclusions.add(self.box)
+        self.cart.discount = discount
+        self.cart.save()
+
+        payload = prepare_stripe_payload(self.session)
+        self.assertEqual(payload['discounts'], [])
+
 
 class StripeWebhookTest(TestCase):
     """The webhook is where money becomes an order: it must be idempotent,

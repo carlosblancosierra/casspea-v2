@@ -147,6 +147,36 @@ class CartTotalsTest(TestCase):
         self.assertEqual(self.cart.discounted_total, Decimal('14.99'))
         self.assertEqual(self.cart.total_savings, Decimal('0.00'))
 
+    def test_discount_not_applied_when_every_item_is_excluded(self):
+        """A coupon that covers nothing in the cart (e.g. a cart holding only
+        an advent calendar) must not reach Stripe, which rejects the session
+        with coupon_applies_to_nothing."""
+        self.add(self.box)
+        discount = self.apply_discount(amount=Decimal('10.00'))
+        discount.exclusions.add(self.box)
+
+        self.assertFalse(self.cart.is_discount_valid)
+        self.assertEqual(self.cart.discounted_total, Decimal('14.99'))
+
+    def test_fixed_discount_not_applied_when_every_item_blocks_codes(self):
+        blocked = make_product('Summer Box', '20.00', block_discount_codes=True)
+        self.add(blocked)
+        self.apply_discount(
+            discount_type=Discount.FIXED_AMOUNT, amount=Decimal('5.00')
+        )
+
+        self.assertFalse(self.cart.is_discount_valid)
+        self.assertEqual(self.cart.discounted_total, Decimal('20.00'))
+
+    def test_discount_applies_again_once_an_eligible_item_is_added(self):
+        self.add(self.box)
+        discount = self.apply_discount(amount=Decimal('10.00'))
+        discount.exclusions.add(self.box)
+        self.assertFalse(self.cart.is_discount_valid)
+
+        self.add(self.big_box)
+        self.assertTrue(self.cart.is_discount_valid)
+
     def test_discount_applies_once_min_order_value_met(self):
         self.add(self.box, quantity=4)  # 59.96 >= 55
         self.apply_discount(amount=Decimal('20.00'), min_order_value=55)
