@@ -112,7 +112,7 @@ class CartSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         if self.instance and self.instance.discount:
-            if not self.instance.is_discount_valid:
+            if self.instance.base_total < self.instance.discount.min_order_value:
                 raise serializers.ValidationError({
                     "discount": f"Order total must be at least £{self.instance.discount.min_order_value} to use this discount code"
                 })

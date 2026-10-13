@@ -149,7 +149,7 @@ class StripeCheckoutSessionView(APIView):
 
             # Handle discounts
             discounts = []
-            if checkout_session.cart.discount and checkout_session.cart.discount.status[0]:
+            if checkout_session.cart.is_discount_valid:
                 discounts = [{'coupon': checkout_session.cart.discount.stripe_id}]
 
             logger.info(

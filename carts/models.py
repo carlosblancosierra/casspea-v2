@@ -64,14 +64,8 @@ class Cart(models.Model):
 
         # For percentage discounts
         if self.discount.discount_type == 'PERCENTAGE':
-            excluded_products = set(self.discount.exclusions.all())
             non_excluded_total = sum(
-                item.base_price
-                for item in self.items.all()
-                # Products that already carry a baked-in discount (e.g. Summer
-                # Break boxes) never receive an additional discount on top.
-                if item.product not in excluded_products
-                and not item.product.block_discount_codes
+                item.base_price for item in self._discountable_items()
             )
             discount_amount = (non_excluded_total * self.discount.amount) / 100
             return max(self.base_total - discount_amount, 0)
@@ -89,16 +83,36 @@ class Cart(models.Model):
         savings = max(self.base_total - self.discounted_total, 0)
         return Decimal(savings).quantize(Decimal('0.01'), rounding=ROUND_UP)
 
+    def _discountable_items(self):
+        """Items the discount can touch: not in its exclusions and not a
+        product with a baked-in discount (e.g. Summer Break boxes), which
+        never receives an additional discount on top."""
+        excluded_products = set(self.discount.exclusions.all())
+        return [
+            item for item in self.items.all()
+            if item.product not in excluded_products
+            and not item.product.block_discount_codes
+        ]
+
     @property
     def is_discount_valid(self):
-        """A discount only counts when it is active (not expired/scheduled)
-        and the cart meets its minimum order value. Every place that applies
-        the discount (totals, Stripe checkout) must use this single check."""
+        """A discount only counts when it is active (not expired/scheduled),
+        the cart meets its minimum order value and at least one item can
+        receive it. Every place that applies the discount (totals, Stripe
+        checkout) must use this single check.
+
+        The last rule matters for Stripe: a coupon restricted to products
+        that are not in the order (e.g. a cart holding only an advent
+        calendar) makes Checkout reject the whole session with
+        `coupon_applies_to_nothing`. The code stays on the cart so it
+        applies again as soon as an eligible product is added."""
         if not self.discount:
             return False
         if not self.discount.status[0]:
             return False
-        return self.base_total >= self.discount.min_order_value
+        if self.base_total < self.discount.min_order_value:
+            return False
+        return bool(self._discountable_items())
 
     class Meta:
         indexes = [
