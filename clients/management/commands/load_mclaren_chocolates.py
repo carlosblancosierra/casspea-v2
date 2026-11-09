@@ -3,7 +3,7 @@
 The four products are client-only: hidden from the shop and the product API,
 sold in multiples of 10, and only a browser that has entered the McLaren
 page's access code can add them to the cart. The Stripe prices were created by hand in the live account
-(£1.80 per piece, VAT inclusive), so this command never calls Stripe.
+(£1.90 per piece, VAT inclusive), so this command never calls Stripe.
 
 Usage::
 
@@ -38,15 +38,15 @@ WELCOME = (
 CATEGORY_SLUG = 'client-chocolates'
 CATEGORY_NAME = 'Client Chocolates'
 
-UNIT_PRICE = Decimal('1.80')
+UNIT_PRICE = Decimal('1.90')
 QUANTITY_STEP = 10
 
 # (flavour name, Stripe price id) — order is the order on the page.
 CHOCOLATES = [
-    ('Vanilla Pecan', 'price_1UZvuaJiuFqKKcn6VmKbat9y'),
-    ('Cinnamon and Spice Caramel', 'price_1UZvujJiuFqKKcn6HqXIn9fR'),
-    ('Sea Salt Caramel', 'price_1UZvulJiuFqKKcn6PTpdBwU0'),
-    ('Dark Chocolate Ganache', 'price_1UZvumJiuFqKKcn6twHwglhc'),
+    ('Vanilla Pecan', 'price_1UZyhWJiuFqKKcn6eo5f5y0I'),
+    ('Cinnamon and Spice Caramel', 'price_1UZyhaJiuFqKKcn66ovl71Jw'),
+    ('Sea Salt Caramel', 'price_1UZyhfJiuFqKKcn6McDjyK2Z'),
+    ('Dark Chocolate Ganache', 'price_1UZyhjJiuFqKKcn6qoqz1qbU'),
 ]
 
 

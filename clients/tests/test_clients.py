@@ -196,7 +196,7 @@ class LoadMclarenChocolatesCommandTest(ClientTestBase):
         self.assertEqual(products.count(), 4)
         for product in products:
             self.assertEqual(product.quantity_step, 10)
-            self.assertEqual(product.base_price, Decimal('1.80'))
+            self.assertEqual(product.base_price, Decimal('1.90'))
             self.assertTrue(product.stripe_price_id.startswith('price_'))
             self.assertFalse(product.category.active)
         self.assertEqual(page.items.count(), 4)
