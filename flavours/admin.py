@@ -4,9 +4,18 @@ from .models import Flavour, FlavourCategory, FlavourSelection, FlavourBox
 
 @admin.register(FlavourCategory)
 class FlavourCategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'active']
-    list_filter = ['active']
+    list_display = ['name', 'active', 'featured', 'available_from']
+    list_filter = ['active', 'featured']
     search_fields = ['name']
+    prepopulated_fields = {'slug': ('name',)}
+    fieldsets = [
+        (None, {'fields': ['name', 'slug', 'active']}),
+        ('Launch', {'fields': ['available_from']}),
+        ('Section on the home and flavours page', {'fields': [
+            'featured', 'featured_title', 'featured_message',
+            'featured_cta_label', 'featured_cta_url',
+        ]}),
+    ]
 
 @admin.register(Flavour)
 class FlavourAdmin(admin.ModelAdmin):
