@@ -26,7 +26,7 @@ class ProductGalleryImageInline(admin.TabularInline):
 class ProductAdmin(admin.ModelAdmin):
     list_display = ['name', 'category', 'base_price', 'active', 'sold_out',
                     'badge_text', 'badge_active', 'featured', 'image_preview']
-    list_filter = ['category', 'active', 'sold_out', 'featured', 'badge_active']
+    list_filter = ['category', 'active', 'client_only', 'sold_out', 'featured', 'badge_active']
     list_editable = ['badge_active', 'featured']
     search_fields = ['name', 'description']
     inlines = [ProductGalleryImageInline]

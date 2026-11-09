@@ -173,7 +173,9 @@ class CartItemViewSet(viewsets.ViewSet):
         # Early validation for clearer errors
         self._validate_product_and_qty(request)
 
-        serializer = CartItemCreateSerializer(data=request.data)
+        serializer = CartItemCreateSerializer(
+            data=request.data, context={'request': request}
+        )
         logger.debug(
             f"CartItemView create payload: {request.data}"
         )
@@ -214,7 +216,8 @@ class CartItemViewSet(viewsets.ViewSet):
                 })
 
         serializer = CartItemCreateSerializer(
-            cart_item, data=request.data, partial=True
+            cart_item, data=request.data, partial=True,
+            context={'request': request},
         )
         logger.debug(
             f"CartItemView update payload: {request.data}"
@@ -257,7 +260,8 @@ class CartItemViewSet(viewsets.ViewSet):
         cart = self.get_cart(request)
         cart_item = get_object_or_404(CartItem, pk=pk, cart=cart)
         serializer = CartItemQuantityUpdateSerializer(
-            cart_item, data=request.data, partial=True
+            cart_item, data=request.data, partial=True,
+            context={'request': request},
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()

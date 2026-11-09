@@ -15,6 +15,7 @@ from .models import (
 )
 from products.models import Product
 from products.serializers import ProductSerializer
+from clients.access import validate_cart_line
 from discounts.serializers import DiscountSerializer
 from discounts.models import Discount
 
@@ -168,7 +169,15 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
         fields = ['product', 'quantity', 'selected_custom_option_key', 'box_customization', 'pack_customization']
 
     def validate(self, data):
-        product = data['product']
+        # On a partial update the product or quantity may be missing: fall back
+        # to the line being edited.
+        product = data.get('product') or getattr(self.instance, 'product', None)
+        if product is None:
+            raise serializers.ValidationError({'product': "This field is required."})
+        quantity = data.get('quantity', getattr(self.instance, 'quantity', 1))
+        request = self.context.get('request')
+        validate_cart_line(product, quantity, getattr(request, 'user', None))
+
         box_customization = data.get('box_customization')
         pack_customization = data.get('pack_customization')
         selected_custom_option_key = data.get('selected_custom_option_key') or None
@@ -373,6 +382,11 @@ class CartUpdateSerializer(serializers.ModelSerializer):
 
 class CartItemQuantityUpdateSerializer(serializers.ModelSerializer):
     quantity = serializers.IntegerField(min_value=1)
+
+    def validate_quantity(self, value):
+        request = self.context.get('request')
+        validate_cart_line(self.instance.product, value, getattr(request, 'user', None))
+        return value
 
     class Meta:
         model = CartItem
