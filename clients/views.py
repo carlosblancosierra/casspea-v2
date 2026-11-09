@@ -1,24 +1,54 @@
-from django.http import Http404
-from rest_framework.generics import RetrieveAPIView
-from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
 
+from .access import has_unlocked, unlock
 from .models import ClientPage
-from .serializers import ClientPageSerializer
+from .serializers import ClientPageLockedSerializer, ClientPageSerializer
 
 
-class ClientPageDetailView(RetrieveAPIView):
-    """GET /api/clients/<slug>/ — the page and its products, for allowed users.
+class ClientPageDetailView(APIView):
+    """GET /api/clients/<slug>/
 
-    Users who are not allowed get a 404, not a 403, so the page's existence
-    isn't confirmed to them.
+    Unlocked (this session entered the code, or staff): the page and its
+    products. Locked: only the name, logo and colour for the code screen.
+    Unknown or inactive page: 404.
     """
-    permission_classes = [IsAuthenticated]
-    serializer_class = ClientPageSerializer
-    lookup_field = 'slug'
-    queryset = ClientPage.objects.active()
+    permission_classes = [AllowAny]
 
-    def get_object(self):
-        page = super().get_object()
-        if not page.allows(self.request.user):
-            raise Http404
-        return page
+    def get(self, request, slug):
+        page = get_object_or_404(ClientPage.objects.active(), slug=slug)
+        if has_unlocked(request, page):
+            return Response(ClientPageSerializer(page, context={'request': request}).data)
+        return Response(ClientPageLockedSerializer(page, context={'request': request}).data)
+
+
+class UnlockThrottle(AnonRateThrottle):
+    # Slows down guessing: a handful of tries a minute per IP.
+    scope = 'client_page_unlock'
+    rate = '10/min'
+
+
+class ClientPageUnlockView(APIView):
+    """POST /api/clients/<slug>/unlock/ {"code": "..."}
+
+    Right code: unlocks the page for this session and returns it.
+    Wrong code: 400. Too many tries: 429.
+    """
+    permission_classes = [AllowAny]
+    # No session auth here, so a signed-in admin isn't asked for a CSRF token.
+    authentication_classes = []
+    throttle_classes = [UnlockThrottle]
+
+    def post(self, request, slug):
+        page = get_object_or_404(ClientPage.objects.active(), slug=slug)
+        if not page.check_access_code(request.data.get('code', '')):
+            return Response(
+                {'code': 'That code is not right.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        unlock(request, page)
+        return Response(ClientPageSerializer(page, context={'request': request}).data)

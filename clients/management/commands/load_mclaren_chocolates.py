@@ -1,20 +1,23 @@
 """Create (or refresh) the McLaren client page and its individual chocolates.
 
 The four products are client-only: hidden from the shop and the product API,
-sold in multiples of 10, and only users allowed on the McLaren page can add
-them to the cart. The Stripe prices were created by hand in the live account
+sold in multiples of 10, and only a browser that has entered the McLaren
+page's access code can add them to the cart. The Stripe prices were created by hand in the live account
 (£1.80 per piece, VAT inclusive), so this command never calls Stripe.
 
 Usage::
 
     python manage.py load_mclaren_chocolates --dry-run
-    python manage.py load_mclaren_chocolates --allow @mclaren.com
-    python manage.py load_mclaren_chocolates --allow anna@mclaren.com --allow ops@mclaren.com
+    python manage.py load_mclaren_chocolates                  # new page: makes up a code and prints it
+    python manage.py load_mclaren_chocolates --code PAPAYA-2026
+    python manage.py load_mclaren_chocolates --new-code       # replace the code with a made-up one
 
-``--allow`` replaces the page's allowed list; leave it out to keep the current
-one (a new page starts empty, which means staff only). Running the command
-again updates the rows in place instead of duplicating them.
+The code is stored hashed, so it is only printed when it is set. Changing it
+locks out everyone who used the old one. Without --code/--new-code an existing
+page keeps its code. Running the command again updates the rows in place
+instead of duplicating them.
 """
+import secrets
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
@@ -47,6 +50,15 @@ CHOCOLATES = [
 ]
 
 
+# No 0/O or 1/I/L, so the code survives being read out over the phone.
+CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+
+def make_code():
+    groups = [''.join(secrets.choice(CODE_ALPHABET) for _ in range(4)) for _ in range(2)]
+    return 'MCL-' + '-'.join(groups)
+
+
 def _slugify(name):
     return 'mclaren-' + '-'.join(name.lower().replace('&', 'and').split())
 
@@ -57,18 +69,20 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true',
                             help="Show what would happen without writing anything.")
-        parser.add_argument('--allow', action='append', default=None, metavar='EMAIL_OR_@DOMAIN',
-                            help="Who may use the page. Repeat for several. Replaces the current list.")
+        codes = parser.add_mutually_exclusive_group()
+        codes.add_argument('--code', help="Set the page's access code to this.")
+        codes.add_argument('--new-code', action='store_true',
+                           help="Replace the access code with a made-up one.")
 
     def handle(self, *args, **opts):
         dry = opts['dry_run']
         with transaction.atomic():
-            self._run(opts['allow'])
+            self._run(opts['code'], opts['new_code'])
             if dry:
                 transaction.set_rollback(True)
                 self.stdout.write(self.style.WARNING("Dry run: nothing was saved."))
 
-    def _run(self, allow):
+    def _run(self, code, new_code):
         category, created = ProductCategory.objects.get_or_create(
             slug=CATEGORY_SLUG,
             defaults={
@@ -83,12 +97,15 @@ class Command(BaseCommand):
             slug=PAGE_SLUG,
             defaults={'name': PAGE_NAME, 'brand_color': BRAND_COLOR, 'welcome_message': WELCOME},
         )
-        if allow is not None:
-            page.allowed_emails = '\n'.join(a.strip() for a in allow if a.strip())
-            page.save(update_fields=['allowed_emails', 'updated'])
         self.stdout.write(f"{'Created' if created else 'Found'} client page '/clients/{page.slug}'")
-        allowed = page.allowed_emails.split() or ['(staff only)']
-        self.stdout.write(f"  allowed: {', '.join(allowed)}")
+        if code is None and (new_code or not page.has_access_code):
+            code = make_code()
+        if code:
+            page.set_access_code(code)
+            page.save(update_fields=['access_code_hash', 'updated'])
+            self.stdout.write(self.style.SUCCESS(f"  access code: {code}  (give this to the client)"))
+        else:
+            self.stdout.write("  access code unchanged")
 
         for order, (flavour_name, price_id) in enumerate(CHOCOLATES):
             name = f"McLaren - Individual Chocolate - {flavour_name}"

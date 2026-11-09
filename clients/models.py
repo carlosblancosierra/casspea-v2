@@ -1,14 +1,24 @@
 """Private pages for a single client (e.g. a company ordering chocolates).
 
-A ClientPage lists products that only that client may buy. Those products
-have ``Product.client_only`` set, which keeps them out of the shop, the
-product API and the category pages, and makes the cart refuse them unless the
-user is allowed on a page that offers them.
+A ClientPage lists products that only that client may buy. The page is
+public but locked with an access code we give the client; no account is
+needed. Entering the code unlocks the page for that browser session (the same
+Django session the anonymous cart uses).
+
+Products on a page have ``Product.client_only`` set, which keeps them out of
+the shop, the product API and the category pages, and makes the cart refuse
+them unless the session has unlocked a page that offers them.
 """
+from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 from storages.backends.s3boto3 import S3Boto3Storage
 
 s3_storage = S3Boto3Storage(location='media')
+
+
+def normalize_code(raw_code):
+    """Codes are typed by people: ignore case and surrounding spaces."""
+    return (raw_code or '').strip().upper()
 
 
 class ClientPageQuerySet(models.QuerySet):
@@ -25,11 +35,10 @@ class ClientPage(models.Model):
         help_text="Client colour as a hex code, e.g. #FF8000. Only used as an accent.",
     )
     welcome_message = models.TextField(blank=True, default='')
-    allowed_emails = models.TextField(
-        blank=True, default='',
-        help_text="Who may open the page and buy its products, one per line. "
-                  "A full address (anna@client.com) or a whole domain "
-                  "(@client.com). Empty means staff only.",
+    access_code_hash = models.CharField(
+        max_length=128, blank=True, default='', editable=False,
+        help_text="Hashed access code. Set it from the admin form or "
+                  "set_access_code(); the plain code is never stored.",
     )
     active = models.BooleanField(default=True)
     created = models.DateTimeField(auto_now_add=True)
@@ -43,24 +52,23 @@ class ClientPage(models.Model):
     def __str__(self):
         return self.name
 
-    def _allowed_entries(self):
-        return {
-            line.strip().lower()
-            for line in self.allowed_emails.splitlines()
-            if line.strip()
-        }
+    @property
+    def has_access_code(self):
+        return bool(self.access_code_hash)
 
-    def allows(self, user):
-        """True if this user may see the page and buy its products."""
-        if not user or not user.is_authenticated:
+    def set_access_code(self, raw_code):
+        self.access_code_hash = make_password(normalize_code(raw_code))
+
+    def check_access_code(self, raw_code):
+        if not self.access_code_hash or not raw_code:
             return False
-        if user.is_staff:
-            return True
-        email = (user.email or '').strip().lower()
-        if not email or '@' not in email:
-            return False
-        entries = self._allowed_entries()
-        return email in entries or '@' + email.split('@', 1)[1] in entries
+        return check_password(normalize_code(raw_code), self.access_code_hash)
+
+    @property
+    def access_fingerprint(self):
+        """Changes whenever the code changes, so a new code locks out
+        everyone who unlocked the page with the old one."""
+        return self.access_code_hash[-16:]
 
 
 class ClientPageItem(models.Model):

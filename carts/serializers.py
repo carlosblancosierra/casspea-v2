@@ -175,8 +175,7 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
         if product is None:
             raise serializers.ValidationError({'product': "This field is required."})
         quantity = data.get('quantity', getattr(self.instance, 'quantity', 1))
-        request = self.context.get('request')
-        validate_cart_line(product, quantity, getattr(request, 'user', None))
+        validate_cart_line(product, quantity, self.context.get('request'))
 
         box_customization = data.get('box_customization')
         pack_customization = data.get('pack_customization')
@@ -384,8 +383,7 @@ class CartItemQuantityUpdateSerializer(serializers.ModelSerializer):
     quantity = serializers.IntegerField(min_value=1)
 
     def validate_quantity(self, value):
-        request = self.context.get('request')
-        validate_cart_line(self.instance.product, value, getattr(request, 'user', None))
+        validate_cart_line(self.instance.product, value, self.context.get('request'))
         return value
 
     class Meta:

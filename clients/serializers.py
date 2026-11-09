@@ -21,12 +21,28 @@ class ClientPageItemSerializer(serializers.ModelSerializer):
         fields = ['id', 'product', 'flavour', 'order']
 
 
+class ClientPageLockedSerializer(serializers.ModelSerializer):
+    """What the code screen may show before the page is unlocked."""
+    locked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ClientPage
+        fields = ['name', 'slug', 'logo', 'brand_color', 'locked']
+
+    def get_locked(self, obj):
+        return True
+
+
 class ClientPageSerializer(serializers.ModelSerializer):
+    locked = serializers.SerializerMethodField()
     items = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientPage
-        fields = ['name', 'slug', 'logo', 'brand_color', 'welcome_message', 'items']
+        fields = ['name', 'slug', 'logo', 'brand_color', 'welcome_message', 'locked', 'items']
+
+    def get_locked(self, obj):
+        return False
 
     def get_items(self, obj):
         items = (
