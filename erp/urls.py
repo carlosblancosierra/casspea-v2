@@ -51,6 +51,7 @@ urlpatterns = [
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('api/flavours/', include(flavours_urls)),
+    path('api/clients/', include('clients.urls')),
     path('api/carts/', include(carts_urls)),
     path('api/checkout/', include(checkout_urls)),
     path('api/addresses/', include(addresses_urls)),

@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     'personalized',
     'experiments',
     'orders_mcp',
+    'clients',
 ]
 
 MIDDLEWARE = [

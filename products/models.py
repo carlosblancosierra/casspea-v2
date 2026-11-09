@@ -65,7 +65,9 @@ class ProductCategory(models.Model):
 
 class ProductManager(models.Manager):
     def active(self):
-        return self.filter(active=True)
+        """Products the shop may list. Client-only products are never listed:
+        they are sold only through their client page (see the clients app)."""
+        return self.filter(active=True, client_only=False)
 
 
 class Product(models.Model):
@@ -115,6 +117,18 @@ class Product(models.Model):
                                      help_text="")
 
     can_pick_allergens = models.BooleanField(default=False)
+
+    client_only = models.BooleanField(
+        default=False,
+        help_text="Only for a specific client: hidden from the shop and the product "
+                  "API, and only users allowed on a client page that offers it can "
+                  "add it to the cart.",
+    )
+    quantity_step = models.PositiveIntegerField(
+        default=1,
+        help_text="Cart quantities must be a multiple of this, e.g. 10 for "
+                  "individual chocolates sold in tens.",
+    )
 
     disable_flavour_selection = models.BooleanField(
         default=False,

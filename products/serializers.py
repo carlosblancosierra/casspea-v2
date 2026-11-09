@@ -15,7 +15,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
     products = serializers.SerializerMethodField()
 
     def get_products(self, obj):
-        products = Product.objects.filter(category=obj, active=True)
+        products = Product.objects.active().filter(category=obj)
         return ProductSerializer(products, many=True).data
 
     class Meta:
@@ -90,6 +90,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'indulgence_image',
             'indulgence_image_webp',
             'custom_options',
+            'quantity_step',
             'created',
             'updated'
         ]
