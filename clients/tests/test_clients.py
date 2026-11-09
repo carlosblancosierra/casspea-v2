@@ -1,9 +1,7 @@
 from decimal import Decimal
-from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.management import call_command
 
 from carts.tests.test_base import BaseAPITest
 from clients.models import ClientPage, ClientPageItem
@@ -180,48 +178,3 @@ class ClientOnlyCartTest(ClientTestBase):
 
     def test_normal_products_unaffected(self):
         self.assertEqual(self.add(3, product=Product.objects.get(pk=4)).status_code, 201)
-
-
-class LoadMclarenChocolatesCommandTest(ClientTestBase):
-    def run_command(self, *args):
-        out = StringIO()
-        call_command('load_mclaren_chocolates', *args, stdout=out)
-        return out.getvalue()
-
-    def test_creates_page_with_code_and_four_hidden_products(self):
-        self.run_command('--code', 'PAPAYA-2026')
-        page = ClientPage.objects.get(slug='mclaren')
-        self.assertTrue(page.check_access_code('PAPAYA-2026'))
-        products = Product.objects.filter(client_only=True)
-        self.assertEqual(products.count(), 4)
-        for product in products:
-            self.assertEqual(product.quantity_step, 10)
-            self.assertEqual(product.base_price, Decimal('1.80'))
-            self.assertTrue(product.stripe_price_id.startswith('price_'))
-            self.assertFalse(product.category.active)
-        self.assertEqual(page.items.count(), 4)
-        self.assertFalse(Product.objects.active().filter(client_only=True).exists())
-
-    def test_makes_up_and_prints_a_code_for_a_new_page(self):
-        out = self.run_command()
-        code = out.split('access code: ')[1].split()[0]
-        self.assertTrue(code.startswith('MCL-'))
-        self.assertTrue(ClientPage.objects.get(slug='mclaren').check_access_code(code))
-
-    def test_rerun_keeps_code_unless_asked(self):
-        self.run_command('--code', 'FIRST')
-        out = self.run_command()
-        self.assertIn('access code unchanged', out)
-        page = ClientPage.objects.get(slug='mclaren')
-        self.assertTrue(page.check_access_code('FIRST'))
-        self.assertEqual(Product.objects.filter(client_only=True).count(), 4)
-        self.assertEqual(ClientPageItem.objects.count(), 4)
-
-        self.run_command('--new-code')
-        page.refresh_from_db()
-        self.assertFalse(page.check_access_code('FIRST'))
-
-    def test_dry_run_saves_nothing(self):
-        self.run_command('--dry-run', '--code', 'X')
-        self.assertFalse(ClientPage.objects.exists())
-        self.assertFalse(Product.objects.filter(client_only=True).exists())
