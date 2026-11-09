@@ -200,6 +200,20 @@ class CartItemCreateSerializer(serializers.ModelSerializer):
                         'flavor_selections': "This box is 'Surprise Me' only — flavours cannot be picked."
                     })
 
+        # Flavours whose category has not launched yet (e.g. the Christmas
+        # flavours before 1 December) are shown in the shop but cannot be
+        # picked. The box builders do not offer them; this stops a stale page
+        # or a hand-made request.
+        for customization, key in ((box_customization, 'flavor_selections'),
+                                   (pack_customization, 'flavor_selections_pack')):
+            for selection in (customization or {}).get(key) or []:
+                flavour = selection.get('flavor')
+                if flavour is not None and flavour.is_coming_soon:
+                    when = flavour.category.available_from.strftime('%-d %B')
+                    raise serializers.ValidationError({
+                        'flavor_selections': f"{flavour.name} is coming soon and can be picked from {when}."
+                    })
+
         # Validate selected_custom_option_key against product.custom_options (if provided)
         if selected_custom_option_key is not None:
             options = product.custom_options or []

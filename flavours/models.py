@@ -1,6 +1,7 @@
 from django.db import models
 from allergens.models import Allergen
 from django.core.files.storage import default_storage
+from django.utils import timezone
 from django.utils.text import slugify
 from storages.backends.s3boto3 import S3Boto3Storage
 
@@ -20,15 +21,65 @@ class FlavourCategory(models.Model):
     active = models.BooleanField(default=True)
     slug = models.SlugField(unique=True)
 
+    # A launch date for the whole category, e.g. the Christmas flavours on
+    # 1 December. Until then its flavours are shown as "coming soon" and cannot
+    # be picked into a box; from that day on they are ordinary flavours. On the
+    # category rather than on each flavour so one date launches them all.
+    available_from = models.DateField(
+        null=True, blank=True,
+        help_text="Flavours in this category show as 'Coming soon' and cannot be "
+                  "picked into a box before this date. Leave empty for flavours "
+                  "on sale now.",
+    )
+
+    # Shows the category as its own section, above the other flavours, on the
+    # home page and the flavours page.
+    featured = models.BooleanField(
+        default=False,
+        help_text="Show this category as its own section on the home page and "
+                  "the flavours page.",
+    )
+    featured_title = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text="Section heading, e.g. 'New Christmas Flavours'. Defaults to the "
+                  "category name.",
+    )
+    featured_message = models.TextField(
+        blank=True, default='',
+        help_text="Line under the heading, e.g. 'Arriving 1 December — and inside "
+                  "every Advent Calendar.'",
+    )
+    featured_cta_label = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text="Optional button under the section, e.g. 'Shop the Advent Calendar'.",
+    )
+    featured_cta_url = models.CharField(
+        max_length=255, blank=True, default='',
+        help_text="Where the button goes, e.g. /shop-now/advent-calendar.",
+    )
+
     objects = FlavourCategoryManager()
+
+    class Meta:
+        verbose_name_plural = 'flavour categories'
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_coming_soon(self):
+        return bool(self.available_from and self.available_from > timezone.localdate())
 
 
 class FlavourManager(models.Manager):
     def active(self):
         return self.filter(active=True)
+
+    def purchasable(self):
+        """Active flavours that can be picked into a box today: not in a
+        category whose launch date is still ahead."""
+        today = timezone.localdate()
+        return self.active().exclude(category__available_from__gt=today)
 
 
 class Flavour(models.Model):
@@ -61,6 +112,10 @@ class Flavour(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_coming_soon(self):
+        return self.category.is_coming_soon
 
     class Meta:
         ordering = ['name']
