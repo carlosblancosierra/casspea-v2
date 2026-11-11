@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "shipping_address": null,
+  "billing_address": null,
+  "cart_total": "74.99",
+  "shipping_option": null,
+  "shipping_cost": "0.00",
+  "total_with_shipping": "74.99",
+  "email": "guest@example.com",
+  "phone": null,
+  "created": "2026-01-01T00:00:00Z",
+  "updated": "2026-01-01T00:00:00Z",
+  "payment_status": "pending",
+  "stripe_payment_intent": null,
+  "stripe_session_id": null,
+  "cart": 1
+}

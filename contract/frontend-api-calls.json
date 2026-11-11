@@ -1,0 +1,247 @@
+[
+  {
+    "endpoint": "addCartItem",
+    "method": "POST",
+    "path": "/api/carts/items/"
+  },
+  {
+    "endpoint": "assignVariant",
+    "method": "POST",
+    "path": "/api/experiments/assign/"
+  },
+  {
+    "endpoint": "changeCartItemQuantity",
+    "method": "PATCH",
+    "path": "/api/carts/items/101/change-quantity/"
+  },
+  {
+    "endpoint": "createEmbeddedCheckoutSession",
+    "method": "POST",
+    "path": "/api/checkout/stripe/embedded/create-session/"
+  },
+  {
+    "endpoint": "createRoyalMailOrder",
+    "method": "POST",
+    "path": "/api/royalmail/orders/CP26-ABCDE/create/"
+  },
+  {
+    "endpoint": "createStripeCheckoutSession",
+    "method": "POST",
+    "path": "/api/checkout/stripe/create-session/"
+  },
+  {
+    "endpoint": "deleteCartItem",
+    "method": "DELETE",
+    "path": "/api/carts/items/101/"
+  },
+  {
+    "endpoint": "downloadSmsContactsCsv",
+    "method": "GET",
+    "path": "/api/addresses/sms-contacts/?format=csv"
+  },
+  {
+    "endpoint": "getActiveProducts",
+    "method": "GET",
+    "path": "/api/products/?active=true"
+  },
+  {
+    "endpoint": "getAddresses",
+    "method": "GET",
+    "path": "/api/addresses/"
+  },
+  {
+    "endpoint": "getAddressesStats",
+    "method": "GET",
+    "path": "/api/addresses/stats"
+  },
+  {
+    "endpoint": "getCart",
+    "method": "GET",
+    "path": "/api/carts/"
+  },
+  {
+    "endpoint": "getCategories",
+    "method": "GET",
+    "path": "/api/products/categories/"
+  },
+  {
+    "endpoint": "getCategory",
+    "method": "GET",
+    "path": "/api/products/categories/boxes/"
+  },
+  {
+    "endpoint": "getClientPage",
+    "method": "GET",
+    "path": "/api/clients/acme/"
+  },
+  {
+    "endpoint": "getDailyUnitsSold",
+    "method": "GET",
+    "path": "/api/orders/daily-units-sold/"
+  },
+  {
+    "endpoint": "getEmbeddedCheckoutSessionResult",
+    "method": "GET",
+    "path": "/api/checkout/stripe/embedded/result/?session_id=cs_test_123"
+  },
+  {
+    "endpoint": "getExperimentResults",
+    "method": "GET",
+    "path": "/api/experiments/box_builder/results/"
+  },
+  {
+    "endpoint": "getFlavours",
+    "method": "GET",
+    "path": "/api/flavours/"
+  },
+  {
+    "endpoint": "getOrder",
+    "method": "GET",
+    "path": "/api/orders/CP26-ABCDE/"
+  },
+  {
+    "endpoint": "getOrders",
+    "method": "GET",
+    "path": "/api/orders/"
+  },
+  {
+    "endpoint": "getOrdersSummary",
+    "method": "GET",
+    "path": "/api/orders/summary/"
+  },
+  {
+    "endpoint": "getProduct",
+    "method": "GET",
+    "path": "/api/products/signature-box/"
+  },
+  {
+    "endpoint": "getProducts",
+    "method": "GET",
+    "path": "/api/products/"
+  },
+  {
+    "endpoint": "getProductsByCategory",
+    "method": "GET",
+    "path": "/api/products/?category=boxes"
+  },
+  {
+    "endpoint": "getSession",
+    "method": "GET",
+    "path": "/api/checkout/session/"
+  },
+  {
+    "endpoint": "getShippingOptions",
+    "method": "GET",
+    "path": "/api/shipping/options/"
+  },
+  {
+    "endpoint": "getShowcaseFlavours",
+    "method": "GET",
+    "path": "/api/flavours/?include=coming_soon"
+  },
+  {
+    "endpoint": "getSmsContacts",
+    "method": "GET",
+    "path": "/api/addresses/sms-contacts/"
+  },
+  {
+    "endpoint": "getStoreStatus",
+    "method": "GET",
+    "path": "/api/checkout/store-status/"
+  },
+  {
+    "endpoint": "getSummerBreakStatus",
+    "method": "GET",
+    "path": "/api/products/admin/summer-break-boxes/"
+  },
+  {
+    "endpoint": "getTemplateDetail",
+    "method": "GET",
+    "path": "/api/personalized/templates/heart/"
+  },
+  {
+    "endpoint": "getTemplates",
+    "method": "GET",
+    "path": "/api/personalized/templates/"
+  },
+  {
+    "endpoint": "login",
+    "method": "POST",
+    "path": "/api/users/jwt/create/"
+  },
+  {
+    "endpoint": "logout",
+    "method": "POST",
+    "path": "/api/users/jwt/logout/"
+  },
+  {
+    "endpoint": "recordExperimentEvent",
+    "method": "POST",
+    "path": "/api/experiments/event/"
+  },
+  {
+    "endpoint": "removeCartItem",
+    "method": "DELETE",
+    "path": "/api/carts/items/101/remove/"
+  },
+  {
+    "endpoint": "runSummerBreakAction",
+    "method": "POST",
+    "path": "/api/products/admin/summer-break-boxes/"
+  },
+  {
+    "endpoint": "sendRequest",
+    "method": "POST",
+    "path": "/api/personalized/send-request/"
+  },
+  {
+    "endpoint": "sendTrackingCodeMail",
+    "method": "POST",
+    "path": "/api/orders/send-tracking-code-mail/"
+  },
+  {
+    "endpoint": "setAddresses",
+    "method": "POST",
+    "path": "/api/addresses/"
+  },
+  {
+    "endpoint": "subscribeGenericLead",
+    "method": "POST",
+    "path": "/api/leads/generic-lead/"
+  },
+  {
+    "endpoint": "subscribeToNewsletter",
+    "method": "POST",
+    "path": "/api/leads/subscribe/"
+  },
+  {
+    "endpoint": "unlockClientPage",
+    "method": "POST",
+    "path": "/api/clients/acme/unlock/"
+  },
+  {
+    "endpoint": "updateCart",
+    "method": "POST",
+    "path": "/api/carts/"
+  },
+  {
+    "endpoint": "updateCartItem",
+    "method": "PUT",
+    "path": "/api/carts/items/101/"
+  },
+  {
+    "endpoint": "updateSession",
+    "method": "POST",
+    "path": "/api/checkout/session/"
+  },
+  {
+    "endpoint": "updateShippingOption",
+    "method": "POST",
+    "path": "/api/checkout/session/7/shipping-option/"
+  },
+  {
+    "endpoint": "verify",
+    "method": "POST",
+    "path": "/api/users/jwt/verify/"
+  }
+]

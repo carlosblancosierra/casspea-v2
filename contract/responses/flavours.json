@@ -1,0 +1,39 @@
+[
+  {
+    "id": 1,
+    "allergens": [
+      {
+        "id": 1,
+        "name": "Milk Solids",
+        "slug": "milk",
+        "created": "2026-01-01T00:00:00Z",
+        "updated": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "category": {
+      "id": 1,
+      "name": "Originals",
+      "active": true,
+      "slug": "originals",
+      "available_from": null,
+      "featured": false,
+      "featured_title": "",
+      "featured_message": "",
+      "featured_cta_label": "",
+      "featured_cta_url": ""
+    },
+    "coming_soon": false,
+    "available_from": null,
+    "name": "Apple Pie",
+    "slug": "apple-pie",
+    "description": "Delight on this delicious and classic flavour, with notes of cinnamon, a creamy ganache and a crunchy base.",
+    "mini_description": "With notes of cinnamon, a creamy ganache and a crunchy base.",
+    "story": "",
+    "featured": false,
+    "featured_message": null,
+    "image": null,
+    "active": true,
+    "created": "2026-01-01T00:00:00Z",
+    "updated": "2026-01-01T00:00:00Z"
+  }
+]
