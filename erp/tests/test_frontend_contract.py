@@ -19,7 +19,6 @@ import json
 import os
 import re
 from pathlib import Path
-from unittest import expectedFailure
 
 from django.conf import settings
 from django.core.cache import cache
@@ -37,10 +36,7 @@ UPDATING = os.environ.get('UPDATE_CONTRACT') == '1'
 # Calls the storefront makes that the API cannot answer. Each one is a known
 # bug (IDs from next-casspea/docs/plan-rediseno-seguro.md). Remove the entry
 # together with the fix, and delete its expected-failure test below.
-KNOWN_GAPS = {
-    ('POST', '/api/personalized/send-request/'):
-        'BUG-05: no such endpoint, so personalised-chocolate requests are lost',
-}
+KNOWN_GAPS = {}
 
 
 def load_frontend_calls():
@@ -95,8 +91,8 @@ class FrontendCallsResolveTest(TestCase):
         called = {(call['method'], call['path'].split('?')[0]) for call in load_frontend_calls()}
         self.assertEqual([gap for gap in KNOWN_GAPS if gap not in called], [])
 
-    @expectedFailure
     def test_bug_05_personalised_request_endpoint_exists(self):
+        # BUG-05 (fixed): the storefront posted here for years and got a 404.
         self.assertIsNotNone(resolve_call('POST', '/api/personalized/send-request/'))
 
 
