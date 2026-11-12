@@ -83,3 +83,18 @@ class ChocolateLayerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChocolateLayer
         fields = ['layer_type', 'color', 'top_image', 'side_image']
+
+class PersonalisedRequestSerializer(serializers.Serializer):
+    """What the storefront's PersonalizedForm posts."""
+    template_slug = serializers.SlugRelatedField(
+        source='template', slug_field='slug', queryset=ChocolateTemplate.objects.all(),
+    )
+    email = serializers.EmailField()
+    comments = serializers.CharField(required=False, allow_blank=True, max_length=2000, default='')
+    custom_design_names = serializers.ListField(
+        child=serializers.CharField(max_length=100, allow_blank=True), required=False, default=list, max_length=20,
+    )
+    flavours = serializers.ListField(
+        child=serializers.IntegerField(min_value=1), required=False, default=list, max_length=100,
+    )
+    quantity = serializers.IntegerField(min_value=1, max_value=100000)

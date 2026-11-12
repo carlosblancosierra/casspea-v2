@@ -5,6 +5,7 @@ from .models import (
     ChocolateTemplate,
     TemplateLayerSlot,
     ChocolateLayer,
+    PersonalisedRequest,
 )
 
 @admin.register(LayerColor)
@@ -47,3 +48,12 @@ class TemplateLayerSlotAdmin(admin.ModelAdmin):
     search_fields = ('template__title', 'layer_type__name')
     ordering = ('template', 'order')  # Ensure slots are displayed in order
     autocomplete_fields = ('template', 'layer_type')  # Enable autocomplete
+
+
+@admin.register(PersonalisedRequest)
+class PersonalisedRequestAdmin(admin.ModelAdmin):
+    list_display = ('created', 'email', 'template', 'quantity', 'handled')
+    list_filter = ('handled', 'template')
+    list_editable = ('handled',)
+    search_fields = ('email', 'comments')
+    readonly_fields = ('created',)
