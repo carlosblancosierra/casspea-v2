@@ -202,6 +202,7 @@ class StripeWebhookTest(TestCase):
         stripe_session = mock.Mock()
         stripe_session.id = 'cs_test_123'
         stripe_session.payment_intent = 'pi_test_123'
+        stripe_session.payment_status = 'paid'
         stripe_session.metadata = {'checkout_session_id': str(self.session.id)}
 
         event = mock.MagicMock()
