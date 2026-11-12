@@ -116,3 +116,25 @@ class UserChosenLayer(models.Model):
 
     def __str__(self):
         return f"{self.user_design} - Layer {self.order} ({self.chocolate_layer})"
+
+class PersonalisedRequest(models.Model):
+    """A customer asking for personalised chocolates from /personalised/<slug>.
+
+    The storefront has posted these to /api/personalized/send-request/ for a
+    long time, but the endpoint did not exist, so every request was lost
+    (BUG-05). Kept here so none is lost again, even if the staff email fails.
+    """
+    template = models.ForeignKey(ChocolateTemplate, on_delete=models.SET_NULL, null=True, blank=True)
+    email = models.EmailField()
+    comments = models.TextField(blank=True)
+    design = models.JSONField(default=list, blank=True, help_text="Colour chosen for each layer, top first.")
+    flavours = models.JSONField(default=list, blank=True, help_text="Names of the flavours asked for.")
+    quantity = models.PositiveIntegerField()
+    handled = models.BooleanField(default=False, help_text="Tick once someone has replied.")
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created']
+
+    def __str__(self):
+        return f"{self.email} - {self.template or 'unknown template'} x {self.quantity}"

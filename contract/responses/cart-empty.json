@@ -1,0 +1,15 @@
+{
+  "id": 1,
+  "items": [],
+  "discount": null,
+  "gift_message": null,
+  "shipping_date": null,
+  "pickup_date": null,
+  "pickup_time": null,
+  "base_total": "0.00",
+  "discounted_total": "0.00",
+  "total_savings": "0.00",
+  "is_discount_valid": false,
+  "created": "2026-01-01T00:00:00Z",
+  "updated": "2026-01-01T00:00:00Z"
+}

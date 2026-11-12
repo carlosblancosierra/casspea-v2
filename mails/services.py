@@ -11,6 +11,8 @@ from django.contrib.contenttypes.models import ContentType
 from datetime import date
 import traceback
 
+from leads.unsubscribe import exclude_opted_out, unsubscribe_url
+
 
 class PendingCheckoutSessionsMailProcessor:
     def get_pending_checkout_sessions(self):
@@ -35,6 +37,8 @@ class PendingCheckoutSessionsMailProcessor:
             emailsent__email_type=email_type,
             emailsent__is_test=False
         )
+        # A reminder with a discount is marketing: not for anyone who opted out.
+        sessions = exclude_opted_out(sessions, 'email')
         return sessions, email_type
 
     def build_email(self, session, email_type, test=False):
@@ -43,6 +47,7 @@ class PendingCheckoutSessionsMailProcessor:
         context = {
             'checkout_session': session,
             'current_year': timezone.now().year,
+            'unsubscribe_url': unsubscribe_url(session.email),
         }
         message = render_to_string(email_type.template_name, context)
         email = EmailMessage(
@@ -109,6 +114,7 @@ class OrderShippingMailProcessor:
             'order': order,
             'tracking_number': order.tracking_number,
             'current_year': timezone.now().year,
+            'unsubscribe_url': unsubscribe_url(order.email),
         }
         message = render_to_string("mails/order_shipping.html", context)
         email = EmailMessage(
@@ -183,6 +189,9 @@ class ReviewRequestMailProcessor:
             .exclude(id__in=sent_twice_ids)
             .exclude(id__in=sent_recently_ids)
         )
+        # Asking for a review is marketing: not for anyone who opted out. Guest
+        # orders carry the address on the session, account orders on the user.
+        orders = exclude_opted_out(orders, 'checkout_session__email', 'checkout_session__cart__user__email')
         return orders, review_email_type
 
     def build_email(self, order, email_type, tracking_token=None, recipient=None, send_number=1):
@@ -195,6 +204,7 @@ class ReviewRequestMailProcessor:
             'order': order,
             'tracking_token': tracking_token,
             'current_year': timezone.now().year,
+            'unsubscribe_url': unsubscribe_url(order.email),
         }
         message = render_to_string(email_type.template_name, context)
         email = EmailMessage(

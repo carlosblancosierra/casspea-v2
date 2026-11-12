@@ -216,6 +216,14 @@ if DEBUG:
         'http://127.0.0.1:3005',  # Extra spaces removed.
     ]
 
+# Another frontend that may call this API, e.g. a staging site, without a code
+# change: CORS_EXTRA_ORIGINS=https://staging.casspea.co.uk (comma-separated).
+# Keep it on casspea.co.uk: the session cookie is SameSite=Lax, so a site on
+# another domain (an amplifyapp.com preview) would not keep its cart.
+CORS_EXTRA_ORIGINS = env.list('CORS_EXTRA_ORIGINS', default=[])
+CORS_ALLOWED_ORIGINS += CORS_EXTRA_ORIGINS
+CSRF_TRUSTED_ORIGINS += CORS_EXTRA_ORIGINS
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
@@ -462,8 +470,10 @@ SERVER_EMAIL = 'errors@casspea.co.uk'
 ADMINS = [('Carlos Blanco', 'carlosblancosierra@gmail.com')]
 STAFF_EMAILS = ['info@casspea.co.uk', 'sandy.gomezc@gmail.com', 'carlosblancosierra@gmail.com']
 
-# Site URL for tracking
-SITE_URL = 'https://www.casspea.co.uk'
+# The storefront's address: where Stripe sends customers back after paying,
+# and the base of links in emails. A staging API points it at the staging
+# storefront, so a test checkout never lands on production (BUG-13).
+SITE_URL = env('SITE_URL', default='https://www.casspea.co.uk').rstrip('/')
 
 # Use WhiteNoise for static files
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

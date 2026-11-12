@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from checkout.models import CheckoutSession
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
@@ -10,9 +11,31 @@ from .serializers import CheckoutSessionSerializer, CheckoutDetailsSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from shipping.models import ShippingOption
+from carts.models import Cart
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+
+def get_own_checkout_session(request, pk):
+    """The checkout session `pk`, only if it belongs to whoever is asking.
+
+    Ids are sequential, so a lookup by id alone let anyone read every
+    customer's email, phone and address, and change their shipping option
+    (BUG-02). A session is yours when its cart is: by user once logged in, by
+    browser session otherwise. Anything else is reported as not found, so the
+    answer does not reveal which ids exist.
+    """
+    if request.user.is_authenticated:
+        owner = Q(cart__user=request.user)
+    elif request.session.session_key:
+        owner = Q(cart__user__isnull=True, cart__session_id=request.session.session_key)
+    else:
+        raise CheckoutSession.DoesNotExist
+    try:
+        return CheckoutSession.objects.select_related('cart').get(owner, pk=pk)
+    except (ValueError, TypeError):  # a non-numeric id
+        raise CheckoutSession.DoesNotExist
 
 
 class CheckoutViewSet(viewsets.ViewSet):
@@ -148,7 +171,7 @@ class CheckoutViewSet(viewsets.ViewSet):
         )
 
         try:
-            checkout_session = CheckoutSession.objects.get(id=pk)
+            checkout_session = get_own_checkout_session(request, pk)
 
             logger.debug(
                 "checkout_session_found",
@@ -191,7 +214,7 @@ class CheckoutViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['post'], url_path='shipping-option')
     def update_shipping_option(self, request, pk=None):
         try:
-            checkout_session = CheckoutSession.objects.get(id=pk)
+            checkout_session = get_own_checkout_session(request, pk)
             shipping_option_id = request.data.get('shipping_option_id')
 
             if not shipping_option_id:
@@ -288,7 +311,17 @@ class CheckoutViewSet(viewsets.ViewSet):
         )
 
         try:
-            checkout_session = CheckoutSession.objects.get_or_create_from_request(request)
+            # A guest session cannot be saved without an email, and a guest who
+            # has not typed one yet has none: trying to create it here answered
+            # 500 to every new visitor of the cart page (BUG-10). They get an
+            # unsaved session for their cart instead, with id null, until
+            # POST /api/checkout/session/ arrives with the email.
+            checkout_session = CheckoutSession.objects.get_or_create_from_request(
+                request, create=request.user.is_authenticated
+            )
+            if checkout_session is None:
+                cart, _ = Cart.objects.get_or_create_from_request(request)
+                checkout_session = CheckoutSession(cart=cart)
 
             logger.info(
                 "checkout_session_retrieved",

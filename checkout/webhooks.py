@@ -14,9 +14,18 @@ from django.core.mail import send_mail
 from erp.settings import STAFF_EMAILS, ADMINS
 import structlog
 from django.contrib.contenttypes.models import ContentType
+from leads.unsubscribe import unsubscribe_url
 
 # Initialize structlog logger
 logger = structlog.get_logger(__name__)
+
+# Events after which Stripe may have the money. Each is fulfilled only when
+# the session's payment_status says so: delayed methods (bank debits,
+# vouchers) complete the session as 'unpaid', and the money arrives later
+# with async_payment_succeeded, or never (async_payment_failed). A zero
+# total, e.g. a 100% coupon, completes as 'no_payment_required'.
+FULFILMENT_EVENTS = ('checkout.session.completed', 'checkout.session.async_payment_succeeded')
+PAID_STATUSES = ('paid', 'no_payment_required')
 
 @csrf_exempt
 def stripe_webhook(request):
@@ -57,9 +66,18 @@ def stripe_webhook(request):
         )
         return HttpResponse(status=400)
 
-    if event and event['type'] == 'checkout.session.completed':
+    if event and event['type'] in FULFILMENT_EVENTS:
         session = event['data']['object']
-        logger.info("Processing checkout.session.completed event", session_id=session.id)
+        payment_status = getattr(session, 'payment_status', None)
+        if payment_status not in PAID_STATUSES:
+            # Not paid yet: no order, no confirmation email. Acknowledged so
+            # Stripe does not retry; async_payment_succeeded comes back here.
+            logger.info("Checkout session completed without payment, waiting",
+                        event_type=event['type'], session_id=session.id,
+                        payment_status=payment_status)
+            return HttpResponse(status=200)
+        logger.info("Processing paid checkout session", event_type=event['type'],
+                    session_id=session.id, payment_status=payment_status)
         checkout_session = None
         order = None
 
@@ -200,16 +218,17 @@ def stripe_webhook(request):
                         sent=timezone.now()
                     )
 
-                    # Render email template
-                    html_content = render_to_string('mails/order_paid.html', {
-                        'order': order,
-                        'current_year': timezone.now().year,
-                    })
-
                     # Get recipient email
                     recipient_email = checkout_session.email or (
                         checkout_session.cart.user.email if checkout_session.cart.user else None
                     )
+
+                    # Render email template
+                    html_content = render_to_string('mails/order_paid.html', {
+                        'order': order,
+                        'current_year': timezone.now().year,
+                        'unsubscribe_url': unsubscribe_url(recipient_email) if recipient_email else None,
+                    })
 
                     if recipient_email:
                         send_mail(
@@ -262,22 +281,49 @@ def stripe_webhook(request):
             logger.exception("Unexpected error during webhook processing", error=str(e))
             return HttpResponse(status=500)
 
+    if event and event['type'] == 'checkout.session.async_payment_failed':
+        session = event['data']['object']
+        try:
+            checkout_session_id = session.metadata['checkout_session_id']
+        except (KeyError, TypeError):
+            logger.warning("async_payment_failed without checkout_session_id", session_id=session.id)
+            return HttpResponse(status=200)
+        updated = CheckoutSession.objects.filter(
+            id=checkout_session_id, payment_status=CheckoutSession.Status.PENDING,
+        ).update(payment_status=CheckoutSession.Status.FAILED)
+        logger.info("Delayed payment failed", checkout_session_id=checkout_session_id,
+                    marked_failed=bool(updated))
+        return HttpResponse(status=200)
+
     if event and event['type'] == 'payment_intent.payment_failed':
         session = event['data']['object']
         logger.info("Processing payment_intent.payment_failed event",
             session_id=session.id
         )
 
+        # The object is a PaymentIntent. It carries checkout_session_id only
+        # when the Checkout Session was created with payment_intent_data
+        # metadata; older ones never did, and reading it answered 500 to every
+        # such event, so Stripe kept retrying them (BUG-07). Nothing to match:
+        # acknowledge.
         try:
-            # Retrieve the CheckoutSession using metadata
             checkout_session_id = session.metadata['checkout_session_id']
+        except (KeyError, TypeError, AttributeError):
+            logger.info("payment_intent.payment_failed without checkout_session_id, ignored",
+                        payment_intent_id=session.id)
+            return HttpResponse(status=200)
+
+        try:
+            # A declined card can still be retried in the same Checkout, so
+            # this never overrides a session that ended up paid.
             checkout_session = CheckoutSession.objects.get(id=checkout_session_id)
             logger.info("CheckoutSession retrieved for failed payment", checkout_session_id=checkout_session_id)
 
             # Update CheckoutSession status
-            checkout_session.payment_status = CheckoutSession.Status.FAILED
-            checkout_session.save()
-            logger.info("CheckoutSession updated to FAILED", checkout_session_id=checkout_session_id)
+            if checkout_session.payment_status == CheckoutSession.Status.PENDING:
+                checkout_session.payment_status = CheckoutSession.Status.FAILED
+                checkout_session.save()
+                logger.info("CheckoutSession updated to FAILED", checkout_session_id=checkout_session_id)
 
         except CheckoutSession.DoesNotExist as csde:
             logger.error("CheckoutSession does not exist for failed payment", checkout_session_id=checkout_session_id, error=str(csde))

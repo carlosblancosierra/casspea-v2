@@ -141,11 +141,8 @@ class StripeCheckoutSessionView(APIView):
                 },
             }
 
-            PROTOCOL = "https"
-            API_DOMAIN = "api.casspea.co.uk"
-            FRONTEND_DOMAIN = "www.casspea.co.uk"
-            FULL_API_DOMAIN = f"{PROTOCOL}://{API_DOMAIN}"
-            FULL_FRONTEND_DOMAIN = f"{PROTOCOL}://{FRONTEND_DOMAIN}"
+            # The storefront Stripe sends the customer back to.
+            FULL_FRONTEND_DOMAIN = settings.SITE_URL
 
             # Handle discounts
             discounts = []
@@ -184,6 +181,11 @@ class StripeCheckoutSessionView(APIView):
                 },
                 metadata={
                     'checkout_session_id': checkout_session.id,
+                },
+                # Copied onto the PaymentIntent, so payment_intent.* webhooks
+                # can find the session too.
+                payment_intent_data={
+                    'metadata': {'checkout_session_id': str(checkout_session.id)},
                 },
                 expires_at=int((timezone.now() + timedelta(minutes=30)).timestamp())
             )
@@ -252,20 +254,20 @@ class StripeSuccessView(APIView):
         session_id = request.GET.get('session_id')
         if not session_id:
             logger.error("Missing session_id in request")
-            return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
+            return redirect(f'{settings.SITE_URL}/checkout/error?session_id={session_id}')
 
         try:
             # Verify the session with Stripe
             session = stripe.checkout.Session.retrieve(session_id)
             if session.payment_status == 'paid':
                 logger.info("stripe_checkout_success", session_id=session_id)
-                return redirect(f'https://www.casspea.co.uk/checkout/success?session_id={session_id}')
+                return redirect(f'{settings.SITE_URL}/checkout/success?session_id={session_id}')
             else:
                 logger.warning("Payment not completed for session", session_id=session_id)
-                return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
+                return redirect(f'{settings.SITE_URL}/checkout/error?session_id={session_id}')
         except stripe.error.StripeError as e:
             logger.error("Stripe API error", error=str(e))
-            return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
+            return redirect(f'{settings.SITE_URL}/checkout/error?session_id={session_id}')
 
 class StripeCancelView(APIView):
     """
@@ -283,7 +285,7 @@ class StripeCancelView(APIView):
         else:
             logger.error("Missing session_id in request")
 
-        return redirect(f'https://www.casspea.co.uk/checkout/error?session_id={session_id}')
+        return redirect(f'{settings.SITE_URL}/checkout/error?session_id={session_id}')
 
 
 class StripeCheckoutSessionEmbeddedView(StripeCheckoutSessionView):

@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Royal Mail",
+    "code": "royal-mail",
+    "website": "https://www.royalmail.com",
+    "track_url": "https://www.royalmail.com/track-your-item",
+    "shipping_options": [
+      {
+        "id": 2,
+        "name": "Regular 48",
+        "delivery_speed": "REGULAR",
+        "price": "3.99",
+        "original_price": "3.99",
+        "discounted_price": "3.99",
+        "discount_amount": "0.00",
+        "estimated_days_min": 2,
+        "estimated_days_max": 3,
+        "guaranteed": false,
+        "description": "Tracked delivery in two to three working days (free on orders over £56)",
+        "disabled": false,
+        "disabled_reason": ""
+      }
+    ]
+  }
+]
