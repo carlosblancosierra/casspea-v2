@@ -537,3 +537,33 @@ class Bug18PreorderPriceTest(TestCase):
         self.assertTrue(Order.objects.filter(checkout_session=self.session).exists())
         self.assertEqual(set(self.cart.items.values_list('product__name', 'quantity')),
                          {('Christmas Box', 2), ('Box of 9', 1)})
+
+
+class Bug09EmailLogoTest(TestCase):
+    """BUG-09 (fixed): the order confirmation and the lead emails show
+    https://www.casspea.co.uk/static/images/logo-gray.png, which the
+    storefront did not serve. next-casspea serves it now
+    (public/static/images/logo-gray.png, pinned by contract/inbound-links.json
+    there), which also mends every email already sent. Here: the logo keeps
+    that address, has a fixed width for clients that ignore CSS (Outlook),
+    and the promo emails, whose style block was an empty placeholder, get the
+    newsletter's styles, so the light logo sits on the purple header."""
+
+    LOGO = re.compile(r'<img src="https://www\.casspea\.co\.uk/static/images/logo-gray\.png"[^>]* width="150"')
+    LEAD_EMAILS = ['newsletter', 'blue20', 'gold20', 'thermomix_giveaway']
+
+    def test_every_logo_keeps_its_address_and_a_fixed_width(self):
+        paths = ['mails/templates/mails/order_paid.html'] + [
+            f'leads/templates/leads/mails/{name}.html' for name in self.LEAD_EMAILS]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertRegex((Path(settings.BASE_DIR) / path).read_text(), self.LOGO)
+
+    def test_the_promo_emails_are_styled_like_the_newsletter(self):
+        from django.template.loader import render_to_string
+
+        for name in self.LEAD_EMAILS:
+            with self.subTest(email=name):
+                html = render_to_string(f'leads/mails/{name}.html', {'unsubscribe_url': 'https://example.com/u'})
+                self.assertIn('.header img', html)
+                self.assertIn('linear-gradient(135deg, #4f46e5 0%, #817df5 100%)', html)
