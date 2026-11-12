@@ -19,6 +19,7 @@ from rest_framework.test import APIClient
 from carts.models import Cart, CartItem
 from carts.tests.test_totals import make_product
 from checkout.models import CheckoutSession
+from checkout.serializers import FIXED_DISPATCH_PICKUP_ERROR
 from orders.models import Order
 from checkout.stripe_utils import prepare_stripe_payload
 from checkout.tests import make_shipping_option
@@ -363,12 +364,13 @@ class Bug13FrontendUrlTest(TestCase):
 
 
 class Bug19FixedDispatchPickupTest(GuestCheckoutMixin, TestCase):
-    """BUG-19: a cart holding a fixed-dispatch product (the advent calendars,
-    posted together on a named day) must not be collected in store. The rule
-    lives in CheckoutDetailsSerializer, which no view uses: the endpoints the
-    storefront calls, POST /api/checkout/session/ and .../shipping-option/,
-    set the pickup option without asking. FixedDispatchBlocksPickupTest in
-    checkout/tests.py tests the serializer directly, so it passes anyway."""
+    """BUG-19 (fixed): a cart holding a fixed-dispatch product (the advent
+    calendars, posted together on a named day) must not be collected in
+    store. The rule only lived in CheckoutDetailsSerializer, which no view
+    uses: the endpoints the storefront calls, POST /api/checkout/session/ and
+    .../shipping-option/, set the pickup option without asking, and Stripe
+    charged it. FixedDispatchBlocksPickupTest in checkout/tests.py tests the
+    serializer directly, so it passed anyway."""
 
     def setUp(self):
         from datetime import timedelta
@@ -379,22 +381,55 @@ class Bug19FixedDispatchPickupTest(GuestCheckoutMixin, TestCase):
 
         self.client = APIClient()
         self.session = self.start_guest_checkout(self.client, 'advent@example.com')
-        calendar = make_product('Advent Calendar', '49.99')
-        calendar.fixed_dispatch_date = timezone.localdate() + timedelta(days=30)
-        calendar.save(update_fields=['fixed_dispatch_date'])
-        self.client.post('/api/carts/items/', {'product': calendar.id, 'quantity': 1}, format='json')
+        self.calendar = make_product('Advent Calendar', '49.99')
+        self.calendar.fixed_dispatch_date = timezone.localdate() + timedelta(days=30)
+        self.calendar.save(update_fields=['fixed_dispatch_date'])
+        self.client.post('/api/carts/items/', {'product': self.calendar.id, 'quantity': 1}, format='json')
         company, _ = ShippingCompany.objects.get_or_create(code='test-courier', defaults={'name': 'Test Courier'})
         self.pickup = ShippingOption.objects.create(
             company=company, name='Store pickup', delivery_speed='PICKUP',
             price=Decimal('0.00'), estimated_days_min=0, estimated_days_max=0,
         )
+        self.courier = make_shipping_option()
 
-    @expectedFailure
-    def test_store_pickup_is_refused_for_a_fixed_dispatch_cart(self):
-        response = self.client.post(
-            f'/api/checkout/session/{self.session.id}/shipping-option/',
-            {'shipping_option_id': self.pickup.id, 'pickup_date': '2026-12-01', 'pickup_time': '10:00 - 11:00'},
+    def choose(self, client, session, option):
+        return client.post(
+            f'/api/checkout/session/{session.id}/shipping-option/',
+            {'shipping_option_id': option.id, 'pickup_date': '2026-12-01', 'pickup_time': '10:00 - 11:00'},
             format='json')
+
+    def test_store_pickup_is_refused_for_a_fixed_dispatch_cart(self):
+        response = self.choose(self.client, self.session, self.pickup)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': FIXED_DISPATCH_PICKUP_ERROR})
+        self.session.refresh_from_db()
+        self.assertNotEqual(self.session.shipping_option, self.pickup)
+
+    def test_setting_the_session_refuses_it_too(self):
+        response = self.client.post('/api/checkout/session/', {'shipping_option_id': self.pickup.id}, format='json')
         self.assertEqual(response.status_code, 400)
         self.session.refresh_from_db()
         self.assertNotEqual(self.session.shipping_option, self.pickup)
+
+    def test_a_courier_service_is_still_accepted(self):
+        response = self.choose(self.client, self.session, self.courier)
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.shipping_option, self.courier)
+
+    def test_a_cart_without_one_can_still_be_collected(self):
+        client = APIClient()
+        session = self.start_guest_checkout(client, 'collect@example.com')
+        self.assertEqual(self.choose(client, session, self.pickup).status_code, 200)
+
+    def test_stripe_is_not_asked_to_charge_a_collection_chosen_before_the_calendar(self):
+        # Collection picked first, the calendar added afterwards.
+        CheckoutSession.objects.filter(id=self.session.id).update(shipping_option=self.pickup)
+        with mock.patch('checkout.stripe_views.stripe.checkout.Session.create') as create:
+            hosted = self.client.post('/api/checkout/stripe/create-session/')
+            embedded = self.client.post('/api/checkout/stripe/embedded/create-session/')
+        self.assertEqual(hosted.status_code, 400)
+        self.assertIn(FIXED_DISPATCH_PICKUP_ERROR, hosted.json()['error'])
+        self.assertEqual(embedded.status_code, 400)
+        self.assertIn(FIXED_DISPATCH_PICKUP_ERROR, embedded.json()['error'])
+        create.assert_not_called()

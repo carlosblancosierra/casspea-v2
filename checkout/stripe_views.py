@@ -6,6 +6,7 @@ from django.conf import settings
 from checkout.models import CheckoutSession
 from rest_framework.exceptions import ValidationError
 from checkout.stripe_utils import prepare_stripe_payload
+from checkout.serializers import pickup_refusal
 from checkout.store_status import store_is_open
 import stripe
 import structlog
@@ -84,6 +85,11 @@ class StripeCheckoutSessionView(APIView):
             # Validate shipping address
             if not checkout_session.shipping_address:
                 raise ValidationError("Shipping address is required")
+
+            # The cart may have changed since the option was chosen.
+            refusal = pickup_refusal(checkout_session.cart, checkout_session.shipping_option)
+            if refusal:
+                raise ValidationError(refusal)
 
             # Retrieve cart items
             cart_items = checkout_session.cart.items.select_related('product').all()
@@ -301,6 +307,9 @@ class StripeCheckoutSessionEmbeddedView(StripeCheckoutSessionView):
             session = CheckoutSession.objects.get_or_create_from_request(request)
             if not session.shipping_address:
                 raise ValidationError("Shipping address is required")
+            refusal = pickup_refusal(session.cart, session.shipping_option)
+            if refusal:
+                raise ValidationError(refusal)
 
             payload = prepare_stripe_payload(session, embedded=True)
             stripe_sess = stripe.checkout.Session.create(**payload)
