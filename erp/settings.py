@@ -528,8 +528,13 @@ if IS_HEROKU:
 # set; see erp/observability.py for what each one needs.
 from erp.observability import init_sentry  # noqa: E402
 
+# The DSN is public by design (it only lets you send events), so production
+# has it built in; SENTRY_DSN overrides it, and local runs and tests send nothing.
+SENTRY_DSN_PRODUCTION = (
+    'https://00fb28e26b9cbda4356e343200314079@o4512420674535424.ingest.us.sentry.io/4512420747345920'
+)
 init_sentry(
-    env('SENTRY_DSN', default=''),
+    env('SENTRY_DSN', default=SENTRY_DSN_PRODUCTION if IS_HEROKU else ''),
     env('SENTRY_ENVIRONMENT', default='production' if IS_HEROKU else ENVIRONMENT),
 )
 

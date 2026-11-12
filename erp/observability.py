@@ -4,7 +4,8 @@ Both are switched on by environment variables only, so local runs, tests and
 any deploy without them configured behave exactly as before.
 
 Sentry
-    SENTRY_DSN                 enables it (Sentry project > Settings > Client Keys)
+    SENTRY_DSN                 overrides the built-in production DSN (Sentry project casspea-api);
+                               set it to an empty string to switch Sentry off
     SENTRY_ENVIRONMENT         defaults to "production" on Heroku, else ENVIRONMENT
     SENTRY_TRACES_SAMPLE_RATE  share of requests traced for performance, 0..1 (default 0)
 
