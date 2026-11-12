@@ -129,14 +129,38 @@ class Bug07PaymentFailedTest(TestCase):
 
 
 class Bug10GuestSessionTest(TestCase):
-    """BUG-10: GET /api/checkout/session/ answers 500 to every guest who has
-    not typed an email yet. The cart page calls it on load."""
+    """BUG-10 (fixed): GET /api/checkout/session/ answered 500 to every guest
+    who had not typed an email yet. The cart page calls it on load."""
 
-    @expectedFailure
+    def setUp(self):
+        self.client = APIClient()
+        self.client.get('/api/carts/')
+
     def test_a_new_guest_can_fetch_their_checkout_session(self):
+        response = self.client.get('/api/checkout/session/')
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIsNone(body['id'])
+        self.assertIsNone(body['email'])
+        self.assertEqual(body['payment_status'], 'pending')
+        self.assertEqual(body['cart_total'], '0.00')
+
+    def test_fetching_it_stores_nothing_until_the_email_arrives(self):
+        self.client.get('/api/checkout/session/')
+        self.assertFalse(CheckoutSession.objects.exists())
+
+        self.client.post('/api/checkout/session/', {'email': 'guest@example.com'}, format='json')
+        body = self.client.get('/api/checkout/session/').json()
+        self.assertIsNotNone(body['id'])
+        self.assertEqual(body['email'], 'guest@example.com')
+        self.assertEqual(CheckoutSession.objects.count(), 1)
+
+    def test_a_logged_in_customer_still_gets_a_saved_session(self):
+        from django.contrib.auth import get_user_model
         client = APIClient()
-        client.get('/api/carts/')
-        self.assertEqual(client.get('/api/checkout/session/').status_code, 200)
+        client.force_authenticate(get_user_model().objects.create_user(email='ada@example.com', password='x' * 12))
+        body = client.get('/api/checkout/session/').json()
+        self.assertIsNotNone(body['id'])
 
 
 class Bug11WebhookSignatureTest(TestCase):

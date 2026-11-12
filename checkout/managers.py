@@ -5,9 +5,12 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 class CheckoutSessionManager(models.Manager):
-    def get_or_create_from_request(self, request):
+    def get_or_create_from_request(self, request, create=True):
         """
         Get or create checkout session from request.
+
+        With create=False, return None instead of creating one when the cart
+        has no pending session yet.
         """
         from carts.models import Cart
 
@@ -66,6 +69,9 @@ class CheckoutSessionManager(models.Manager):
                     existing_session.email = request.data['email']
                     existing_session.save(update_fields=['email'])
                 return existing_session
+
+            if not create:
+                return None
 
             # Create new session
             email = cart.user.email if cart.user else request.data.get('email')

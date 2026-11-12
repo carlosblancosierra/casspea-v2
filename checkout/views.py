@@ -10,6 +10,7 @@ from .serializers import CheckoutSessionSerializer, CheckoutDetailsSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from shipping.models import ShippingOption
+from carts.models import Cart
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -288,7 +289,17 @@ class CheckoutViewSet(viewsets.ViewSet):
         )
 
         try:
-            checkout_session = CheckoutSession.objects.get_or_create_from_request(request)
+            # A guest session cannot be saved without an email, and a guest who
+            # has not typed one yet has none: trying to create it here answered
+            # 500 to every new visitor of the cart page (BUG-10). They get an
+            # unsaved session for their cart instead, with id null, until
+            # POST /api/checkout/session/ arrives with the email.
+            checkout_session = CheckoutSession.objects.get_or_create_from_request(
+                request, create=request.user.is_authenticated
+            )
+            if checkout_session is None:
+                cart, _ = Cart.objects.get_or_create_from_request(request)
+                checkout_session = CheckoutSession(cart=cart)
 
             logger.info(
                 "checkout_session_retrieved",
