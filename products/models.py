@@ -346,24 +346,25 @@ class Product(models.Model):
 
         super().save(*args, **kwargs)
 
+    IMAGE_FIELD_NAMES = (
+        'image', 'image_webp', 'thumbnail', 'thumbnail_webp',
+        'wide_image', 'wide_image_webp', 'indulgence_image', 'indulgence_image_webp',
+    )
+
     def delete(self, *args, **kwargs):
-        # Delete all associated images
-        if self.image:
-            self.image.delete()
-        if self.image_webp:
-            self.image_webp.delete()
-        if self.thumbnail:
-            self.thumbnail.delete()
-        if self.thumbnail_webp:
-            self.thumbnail_webp.delete()
-        if self.wide_image:
-            self.wide_image.delete()
-        if self.wide_image_webp:
-            self.wide_image_webp.delete()
-        if self.indulgence_image:
-            self.indulgence_image.delete()
-        if self.indulgence_image_webp:
-            self.indulgence_image_webp.delete()
+        # Delete the image files, except ones another product still points at
+        # (client and clearance boxes reuse the shop boxes' pictures).
+        others = Product.objects.exclude(pk=self.pk)
+        for field_name in self.IMAGE_FIELD_NAMES:
+            image = getattr(self, field_name)
+            if not image:
+                continue
+            shared = any(
+                others.filter(**{name: image.name}).exists()
+                for name in self.IMAGE_FIELD_NAMES
+            )
+            if not shared:
+                image.delete(save=False)
         super().delete(*args, **kwargs)
 
     @property
