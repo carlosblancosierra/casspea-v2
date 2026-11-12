@@ -220,6 +220,11 @@
     "path": "/api/clients/acme/unlock/"
   },
   {
+    "endpoint": "unsubscribe",
+    "method": "POST",
+    "path": "/api/leads/unsubscribe/"
+  },
+  {
     "endpoint": "updateCart",
     "method": "POST",
     "path": "/api/carts/"

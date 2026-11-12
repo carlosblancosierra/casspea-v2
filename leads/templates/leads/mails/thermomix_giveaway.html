@@ -48,7 +48,7 @@
         <div class="footer">
             <p>&copy; {{ current_year }} CassPea. All rights reserved.</p>
             <p>You are receiving this email because you entered the CassPea Thermomix Giveaway.</p>
-            <p><a href="https://www.casspea.co.uk/unsubscribe/">Unsubscribe</a></p>
+            <p><a href="{{ unsubscribe_url|default:'https://www.casspea.co.uk/unsubscribe' }}">Unsubscribe</a></p>
         </div>
     </div>
 </body>

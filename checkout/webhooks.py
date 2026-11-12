@@ -14,6 +14,7 @@ from django.core.mail import send_mail
 from erp.settings import STAFF_EMAILS, ADMINS
 import structlog
 from django.contrib.contenttypes.models import ContentType
+from leads.unsubscribe import unsubscribe_url
 
 # Initialize structlog logger
 logger = structlog.get_logger(__name__)
@@ -217,16 +218,17 @@ def stripe_webhook(request):
                         sent=timezone.now()
                     )
 
-                    # Render email template
-                    html_content = render_to_string('mails/order_paid.html', {
-                        'order': order,
-                        'current_year': timezone.now().year,
-                    })
-
                     # Get recipient email
                     recipient_email = checkout_session.email or (
                         checkout_session.cart.user.email if checkout_session.cart.user else None
                     )
+
+                    # Render email template
+                    html_content = render_to_string('mails/order_paid.html', {
+                        'order': order,
+                        'current_year': timezone.now().year,
+                        'unsubscribe_url': unsubscribe_url(recipient_email) if recipient_email else None,
+                    })
 
                     if recipient_email:
                         send_mail(
