@@ -116,16 +116,55 @@ class Bug03UnpaidCompletionTest(TestCase):
 
 
 class Bug07PaymentFailedTest(TestCase):
-    """BUG-07: payment_intent.payment_failed reads checkout_session_id from the
-    PaymentIntent's metadata, but only the Checkout Session carries it. Every
-    such event answers 500, so Stripe keeps retrying it."""
+    """BUG-07 (fixed): payment_intent.payment_failed read checkout_session_id
+    from the PaymentIntent's metadata, but only the Checkout Session carried
+    it. Every such event answered 500, so Stripe kept retrying it."""
 
-    @expectedFailure
-    def test_payment_failed_without_session_metadata_is_acknowledged(self):
-        event = stripe_event('payment_intent.payment_failed', {
-            'id': 'pi_test', 'object': 'payment_intent', 'metadata': {},
+    def setUp(self):
+        cart = Cart.objects.create(session_id='bug-07')
+        CartItem.objects.create(cart=cart, product=make_product('Box of 9', '14.99'), quantity=1)
+        self.session = CheckoutSession.objects.create(
+            cart=cart, email='guest@example.com', shipping_option=make_shipping_option())
+
+    def failed(self, metadata):
+        return stripe_event('payment_intent.payment_failed', {
+            'id': 'pi_test', 'object': 'payment_intent', 'metadata': metadata,
         })
-        self.assertEqual(post_webhook(self.client, event).status_code, 200)
+
+    def test_payment_failed_without_session_metadata_is_acknowledged(self):
+        self.assertEqual(post_webhook(self.client, self.failed({})).status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PENDING)
+
+    def test_payment_failed_with_session_metadata_marks_it_failed(self):
+        response = post_webhook(self.client, self.failed({'checkout_session_id': str(self.session.id)}))
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.FAILED)
+
+    def test_a_late_failure_never_undoes_a_paid_session(self):
+        self.session.payment_status = CheckoutSession.Status.PAID
+        self.session.save()
+        post_webhook(self.client, self.failed({'checkout_session_id': str(self.session.id)}))
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PAID)
+
+    def test_both_checkouts_copy_the_session_id_onto_the_payment_intent(self):
+        expected = {'metadata': {'checkout_session_id': str(self.session.id)}}
+        self.assertEqual(prepare_stripe_payload(self.session, embedded=True)['payment_intent_data'], expected)
+
+        from addresses.models import Address
+        self.session.shipping_address = Address.objects.create(
+            street_address='1 Test Street', city='London', postcode='SW1A 1AA')
+        self.session.save()
+        client = APIClient()
+        with mock.patch('checkout.stripe_views.CheckoutSession.objects.get_or_create_from_request',
+                        return_value=self.session), \
+                mock.patch('checkout.stripe_views.stripe.checkout.Session.create',
+                           return_value=mock.Mock(id='cs_test', url='https://checkout.stripe.com/x')) as create:
+            response = client.post('/api/checkout/stripe/create-session/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(create.call_args.kwargs['payment_intent_data'], expected)
 
 
 class Bug10GuestSessionTest(TestCase):

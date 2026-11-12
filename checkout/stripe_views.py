@@ -185,6 +185,11 @@ class StripeCheckoutSessionView(APIView):
                 metadata={
                     'checkout_session_id': checkout_session.id,
                 },
+                # Copied onto the PaymentIntent, so payment_intent.* webhooks
+                # can find the session too.
+                payment_intent_data={
+                    'metadata': {'checkout_session_id': str(checkout_session.id)},
+                },
                 expires_at=int((timezone.now() + timedelta(minutes=30)).timestamp())
             )
 
