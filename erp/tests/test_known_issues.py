@@ -290,15 +290,43 @@ class Bug11WebhookSignatureTest(TestCase):
 
 
 class Bug12QuantityValidationTest(TestCase):
-    """BUG-12: a non-numeric quantity raises ValueError (500) instead of 400."""
+    """BUG-12 (fixed): a quantity that is not a whole number raised ValueError
+    or TypeError (500) instead of being refused with 400."""
 
-    @expectedFailure
+    def setUp(self):
+        self.client = APIClient(raise_request_exception=False)
+        self.client.get('/api/carts/')
+        self.product = make_product('Box of 9', '14.99')
+
+    def add(self, quantity):
+        return self.client.post('/api/carts/items/', {'product': self.product.id, 'quantity': quantity},
+                                format='json')
+
     def test_non_numeric_quantity_is_a_400(self):
-        client = APIClient(raise_request_exception=False)
-        client.get('/api/carts/')
-        product = make_product('Box of 9', '14.99')
-        response = client.post('/api/carts/items/', {'product': product.id, 'quantity': 'abc'}, format='json')
+        response = self.add('abc')
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'quantity': 'Quantity must be a whole number'})
+
+    def test_a_null_or_fractional_quantity_is_a_400(self):
+        for quantity in (None, 2.5, '2.5', True):
+            with self.subTest(quantity=quantity):
+                self.assertEqual(self.add(quantity).status_code, 400)
+
+    def test_zero_keeps_its_message(self):
+        response = self.add(0)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'quantity': 'Quantity must be greater than 0'})
+
+    def test_a_number_sent_as_text_still_works(self):
+        response = self.add('2')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['items'][0]['quantity'], 2)
+
+    def test_updating_a_line_with_a_non_numeric_quantity_is_a_400(self):
+        line_id = self.add(1).json()['items'][0]['id']
+        response = self.client.put(f'/api/carts/items/{line_id}/', {'quantity': 'abc'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(CartItem.objects.get(id=line_id).quantity, 1)
 
 
 @override_settings(SITE_URL='https://staging.casspea.test')
