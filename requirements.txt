@@ -13,7 +13,6 @@ gunicorn==21.2.0
 whitenoise==6.6.0
 dj-database-url==2.1.0
 djangorestframework-simplejwt
-rest_framework_simplejwt
 djoser
 django-filter
 watchtower

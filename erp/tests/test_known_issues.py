@@ -1,10 +1,11 @@
-"""Known defects, each pinned by a test that describes the correct behaviour.
+"""Defects found in the November 2026 audit, each pinned by a test that
+describes the correct behaviour. IDs match next-casspea's
+docs/plan-rediseno-seguro.md.
 
-Every test here is marked @expectedFailure: it fails today, so the suite stays
-green while the bug exists. Fixing the bug makes the test pass, Django reports
-an "unexpected success" and the run goes red. That is the signal to delete
-the decorator, keep the test as a regression guard, and tick the bug off in
-next-casspea/docs/plan-rediseno-seguro.md, where the IDs come from.
+An open bug's test is marked @expectedFailure: it fails today, so the suite
+stays green while the bug exists. Fixing the bug makes the test pass, Django
+reports an "unexpected success" and the run goes red. That is the signal to
+delete the decorator: the test stays here as a regression guard.
 """
 import re
 from pathlib import Path
@@ -53,11 +54,11 @@ class GuestCheckoutMixin:
 
 
 class Bug01DependencyConfusionTest(TestCase):
-    """BUG-01: requirements.txt installs `rest_framework_simplejwt`, a
+    """BUG-01 (fixed): requirements.txt installed `rest_framework_simplejwt`, a
     dependency-confusion proof-of-concept package (0.0.2), into production.
-    The real library is `djangorestframework-simplejwt`, already listed."""
+    The real library is `djangorestframework-simplejwt`. A name like this must
+    never come back: whoever owns it on PyPI decides what the next deploy runs."""
 
-    @expectedFailure
     def test_requirements_do_not_install_the_poc_package(self):
         lines = (Path(settings.BASE_DIR) / 'requirements.txt').read_text().splitlines()
         names = {re.split(r'[<>=!~\[ ;]', line.strip(), maxsplit=1)[0].lower()
