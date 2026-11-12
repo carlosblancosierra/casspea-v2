@@ -75,6 +75,11 @@
     "path": "/api/clients/acme/"
   },
   {
+    "endpoint": "getClientSetups",
+    "method": "GET",
+    "path": "/api/clients/admin/setups/"
+  },
+  {
     "endpoint": "getDailyUnitsSold",
     "method": "GET",
     "path": "/api/orders/daily-units-sold/"
@@ -163,6 +168,11 @@
     "endpoint": "getTemplates",
     "method": "GET",
     "path": "/api/personalized/templates/"
+  },
+  {
+    "endpoint": "loadClientSetup",
+    "method": "POST",
+    "path": "/api/clients/admin/setups/"
   },
   {
     "endpoint": "login",
