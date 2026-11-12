@@ -433,3 +433,107 @@ class Bug19FixedDispatchPickupTest(GuestCheckoutMixin, TestCase):
         self.assertEqual(embedded.status_code, 400)
         self.assertIn(FIXED_DISPATCH_PICKUP_ERROR, embedded.json()['error'])
         create.assert_not_called()
+
+
+class Bug18PreorderPriceTest(TestCase):
+    """BUG-18 (fixed): a product on pre-order costs preorder_price in the cart,
+    but Stripe was always asked for stripe_price_id, which points at whatever
+    price was set up in Stripe, usually the regular one. Unless someone
+    changed it when the pre-order started, the customer saw one amount and
+    paid another. A line whose Stripe price differs is now priced inline at
+    the cart's amount, on the same Stripe product (so product-restricted
+    coupons still apply), and the webhook maps it back to the product."""
+
+    def setUp(self):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from django.utils import timezone
+
+        self.preorder = make_product(
+            'Christmas Box', '30.00', preorder=True, preorder_price=Decimal('25.00'),
+            preorder_finish_date=timezone.localdate() + timedelta(days=10))
+        self.regular = make_product('Box of 9', '14.99')
+        self.cart = Cart.objects.create(session_id='bug-18')
+        CartItem.objects.create(cart=self.cart, product=self.preorder, quantity=2)
+        CartItem.objects.create(cart=self.cart, product=self.regular, quantity=1)
+        self.session = CheckoutSession.objects.create(
+            cart=self.cart, email='guest@example.com', shipping_option=make_shipping_option())
+
+    def stripe_price(self, unit_amount):
+        return stripe.Price.construct_from({
+            'id': 'price_Christmas Box', 'object': 'price', 'unit_amount': unit_amount,
+            'currency': 'gbp', 'product': 'prod_christmas', 'tax_behavior': 'inclusive',
+        }, 'sk_test_dummy')
+
+    def payload(self, unit_amount):
+        with mock.patch('stripe.Price.retrieve',
+                        return_value=self.stripe_price(unit_amount)) as retrieve:
+            payload = prepare_stripe_payload(self.session)
+        return payload, retrieve
+
+    def test_a_preorder_line_is_charged_at_the_cart_price(self):
+        payload, retrieve = self.payload(3000)
+        retrieve.assert_called_once_with('price_Christmas Box')
+        preorder_line, regular_line = sorted(payload['line_items'], key=lambda line: 'price' in line)
+        self.assertEqual(preorder_line['price_data'], {
+            'currency': 'gbp', 'product': 'prod_christmas', 'unit_amount': 2500, 'tax_behavior': 'inclusive'})
+        self.assertNotIn('price', preorder_line)
+        self.assertEqual(preorder_line['quantity'], 2)
+        self.assertEqual(regular_line['price'], 'price_Box of 9')
+        self.assertEqual(payload['metadata']['preorder:prod_christmas'], 'price_Christmas Box')
+
+    def test_a_stripe_price_that_already_matches_is_used_as_it_is(self):
+        payload, _ = self.payload(2500)
+        self.assertEqual({line['price'] for line in payload['line_items']},
+                         {'price_Christmas Box', 'price_Box of 9'})
+        self.assertEqual(set(payload['metadata']), {'checkout_session_id'})
+
+    def test_regular_products_do_not_ask_stripe(self):
+        self.cart.items.filter(product=self.preorder).delete()
+        _, retrieve = self.payload(3000)
+        retrieve.assert_not_called()
+
+    def test_the_hosted_checkout_sends_the_same_lines(self):
+        from addresses.models import Address
+        self.session.shipping_address = Address.objects.create(
+            street_address='1 Test Street', city='London', postcode='SW1A 1AA')
+        self.session.save()
+        with mock.patch('checkout.stripe_views.CheckoutSession.objects.get_or_create_from_request',
+                        return_value=self.session), \
+                mock.patch('stripe.Price.retrieve', return_value=self.stripe_price(3000)), \
+                mock.patch('checkout.stripe_views.stripe.checkout.Session.create',
+                           return_value=mock.Mock(id='cs_test', url='https://checkout.stripe.com/x')) as create:
+            response = APIClient().post('/api/checkout/stripe/create-session/')
+        self.assertEqual(response.status_code, 200)
+        kwargs = create.call_args.kwargs
+        amounts = [line['price_data']['unit_amount'] for line in kwargs['line_items'] if 'price_data' in line]
+        self.assertEqual(amounts, [2500])
+        self.assertEqual(kwargs['metadata']['preorder:prod_christmas'], 'price_Christmas Box')
+
+    def test_the_webhook_keeps_a_preorder_line_priced_inline(self):
+        def line(price_id, product, quantity):
+            return stripe.LineItem.construct_from({
+                'id': f'li_{price_id}', 'object': 'item', 'quantity': quantity,
+                'price': {'id': price_id, 'object': 'price', 'product': product},
+            }, 'sk_test_dummy')
+
+        # Stripe reports the inline price under a one-off id.
+        lines = mock.Mock()
+        lines.auto_paging_iter.return_value = iter([
+            line('price_1OneOffInline', 'prod_christmas', 2), line('price_Box of 9', 'prod_box', 1)])
+        event = stripe_event('checkout.session.completed', {
+            'id': 'cs_test_bug18', 'object': 'checkout.session', 'payment_status': 'paid',
+            'payment_intent': 'pi_test_bug18',
+            'metadata': {'checkout_session_id': str(self.session.id),
+                         'preorder:prod_christmas': 'price_Christmas Box'},
+        })
+        with mock.patch('checkout.webhooks.stripe.Webhook.construct_event', return_value=event), \
+                mock.patch('checkout.webhooks.stripe.checkout.Session.list_line_items', return_value=lines):
+            response = APIClient().post(WEBHOOK_URL, data=b'{}', content_type='application/json',
+                                        HTTP_STRIPE_SIGNATURE='t=1,v1=sig')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Order.objects.filter(checkout_session=self.session).exists())
+        self.assertEqual(set(self.cart.items.values_list('product__name', 'quantity')),
+                         {('Christmas Box', 2), ('Box of 9', 1)})
