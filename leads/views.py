@@ -12,6 +12,9 @@ from rest_framework.permissions import IsAdminUser
 from django.http import HttpResponse
 import csv
 from rest_framework.views import APIView  # type: ignore
+from rest_framework.permissions import AllowAny
+from django.core import signing
+from .unsubscribe import email_from_token, mask, opt_out, unsubscribe_url
 
 
 class SubscribeNewsletterView(generics.CreateAPIView):
@@ -33,7 +36,7 @@ class SubscribeNewsletterView(generics.CreateAPIView):
         )
 
         # Render the HTML email template
-        html_message = render_to_string('leads/mails/newsletter.html', {})
+        html_message = render_to_string('leads/mails/newsletter.html', {'unsubscribe_url': unsubscribe_url(lead.email)})
 
         subject = 'Newsletter Discount Code'
         from_email = settings.DEFAULT_FROM_EMAIL
@@ -141,7 +144,7 @@ class SendBlue20View(generics.CreateAPIView):
             defaults={'template_name': 'leads/mails/blue20.html'}
         )
         html_message = render_to_string(
-            'leads/mails/blue20.html', {}
+            'leads/mails/blue20.html', {'unsubscribe_url': unsubscribe_url(lead.email)}
         )
         subject = (
             'Your CassPea BLUE20 Discount Code'
@@ -204,7 +207,7 @@ class SendGold20View(generics.CreateAPIView):
             name=EmailType.GOLD20,
             defaults={'template_name': 'leads/mails/gold20.html'}
         )
-        html_message = render_to_string('leads/mails/gold20.html', {})
+        html_message = render_to_string('leads/mails/gold20.html', {'unsubscribe_url': unsubscribe_url(lead.email)})
         subject = 'Your CassPea GOLD20 Discount Code'
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [lead.email]
@@ -264,7 +267,7 @@ class ThermomixGiveawayEntryView(generics.CreateAPIView):
             name=EmailType.THERMOMIX_GIVEAWAY,
             defaults={'template_name': 'leads/mails/thermomix_giveaway.html'}
         )
-        html_message = render_to_string('leads/mails/thermomix_giveaway.html', {})
+        html_message = render_to_string('leads/mails/thermomix_giveaway.html', {'unsubscribe_url': unsubscribe_url(lead.email)})
         subject = 'You’re in the CassPea Thermomix Giveaway!'
         from_email = settings.DEFAULT_FROM_EMAIL
         recipient_list = [lead.email]
@@ -308,3 +311,25 @@ class ThermomixGiveawayEntryView(generics.CreateAPIView):
             ),
             headers=headers
         )
+
+
+class UnsubscribeView(APIView):
+    """POST /api/leads/unsubscribe/ {"token": "..."}
+
+    The token comes from the link at the bottom of every email (see
+    leads/unsubscribe.py). A valid one records the opt-out and answers with
+    the address, masked, so the page can confirm whose it was. Posting the
+    same token again is fine. The storefront asks for a click first, so link
+    scanners that open every URL in an email unsubscribe nobody.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = request.data.get('token') or ''
+        try:
+            email = email_from_token(token)
+        except signing.BadSignature:
+            return Response({'token': 'This unsubscribe link is not valid.'}, status=status.HTTP_400_BAD_REQUEST)
+        opt_out(email)
+        return Response({'email': mask(email)}, status=status.HTTP_200_OK)
