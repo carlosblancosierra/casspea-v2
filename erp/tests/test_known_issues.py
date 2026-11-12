@@ -269,14 +269,24 @@ class Bug10GuestSessionTest(TestCase):
 
 
 class Bug11WebhookSignatureTest(TestCase):
-    """BUG-11: a webhook call without a Stripe-Signature header raises KeyError
-    (500) instead of being rejected with 400."""
+    """BUG-11 (fixed): a webhook call without a Stripe-Signature header raised
+    KeyError (500) instead of being rejected with 400."""
 
-    @expectedFailure
     def test_missing_signature_header_is_a_400(self):
         client = APIClient(raise_request_exception=False)
         response = client.post(WEBHOOK_URL, data=b'{}', content_type='application/json')
         self.assertEqual(response.status_code, 400)
+
+    def test_an_empty_signature_header_is_a_400(self):
+        client = APIClient(raise_request_exception=False)
+        response = client.post(WEBHOOK_URL, data=b'{}', content_type='application/json',
+                               HTTP_STRIPE_SIGNATURE='')
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_signed_call_still_reaches_the_handler(self):
+        event = stripe_event('customer.created', {'id': 'cus_test'})
+        response = post_webhook(APIClient(), event)
+        self.assertEqual(response.status_code, 200)
 
 
 class Bug12QuantityValidationTest(TestCase):

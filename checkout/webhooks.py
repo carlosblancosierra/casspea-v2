@@ -30,7 +30,13 @@ PAID_STATUSES = ('paid', 'no_payment_required')
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
-    sig_header = request.META['HTTP_STRIPE_SIGNATURE']
+    # Stripe signs every delivery. A request without the header did not come
+    # from Stripe, so it is refused like a bad signature (400), not with a
+    # KeyError (500) that would show up as a server error (BUG-11).
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    if not sig_header:
+        logger.warning("Webhook call without a Stripe-Signature header")
+        return HttpResponse(status=400)
     event = None
 
     # Get the appropriate webhook secret based on environment
