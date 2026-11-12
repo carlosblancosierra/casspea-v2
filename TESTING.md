@@ -27,11 +27,12 @@ CI runs the same command on every push and pull request
   must reach a view that accepts its method, and the responses the shop is
   built on must keep the shape stored in `contract/responses/`. See
   [contract/README.md](contract/README.md).
-- `erp/tests/test_known_issues.py` — known bugs, one test each (see below).
+- `erp/tests/test_known_issues.py` — the bugs from the November 2026 audit,
+  one test class each. All of them are fixed; the tests stay as guards.
 
 ## Known bugs
 
-A known bug is pinned by a test that describes the correct behaviour and is
+A new bug is pinned by a test that describes the correct behaviour and is
 marked `@expectedFailure`, so the suite stays green while the bug exists.
 Fixing the bug makes the test pass, Django reports an "unexpected success"
 and the run fails: delete the decorator and keep the test as a guard. IDs

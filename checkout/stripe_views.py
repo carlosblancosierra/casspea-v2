@@ -5,7 +5,8 @@ from django.shortcuts import redirect
 from django.conf import settings
 from checkout.models import CheckoutSession
 from rest_framework.exceptions import ValidationError
-from checkout.stripe_utils import prepare_stripe_payload
+from checkout.stripe_utils import prepare_stripe_payload, stripe_line_items
+from checkout.serializers import pickup_refusal
 from checkout.store_status import store_is_open
 import stripe
 import structlog
@@ -85,6 +86,11 @@ class StripeCheckoutSessionView(APIView):
             if not checkout_session.shipping_address:
                 raise ValidationError("Shipping address is required")
 
+            # The cart may have changed since the option was chosen.
+            refusal = pickup_refusal(checkout_session.cart, checkout_session.shipping_option)
+            if refusal:
+                raise ValidationError(refusal)
+
             # Retrieve cart items
             cart_items = checkout_session.cart.items.select_related('product').all()
 
@@ -104,7 +110,6 @@ class StripeCheckoutSessionView(APIView):
                 raise ValidationError("Cart is empty")
 
             # Create line items for Stripe
-            line_items = []
             for item in cart_items:
                 if not item.product.stripe_price_id:
                     logger.error(
@@ -114,13 +119,8 @@ class StripeCheckoutSessionView(APIView):
                     )
                     raise ValidationError(f"Product {item.product.name} is not configured for payment")
 
-                line_items.append({
-                    'price': item.product.stripe_price_id,
-                    'quantity': item.quantity,
-                    'adjustable_quantity': {
-                        'enabled': False,
-                    },
-                })
+            # Charged at the cart's prices, pre-orders included (BUG-18).
+            line_items, preorder_metadata = stripe_line_items(cart_items)
 
             logger.info(
                 "line_items_created",
@@ -181,6 +181,7 @@ class StripeCheckoutSessionView(APIView):
                 },
                 metadata={
                     'checkout_session_id': checkout_session.id,
+                    **preorder_metadata,
                 },
                 # Copied onto the PaymentIntent, so payment_intent.* webhooks
                 # can find the session too.
@@ -301,6 +302,9 @@ class StripeCheckoutSessionEmbeddedView(StripeCheckoutSessionView):
             session = CheckoutSession.objects.get_or_create_from_request(request)
             if not session.shipping_address:
                 raise ValidationError("Shipping address is required")
+            refusal = pickup_refusal(session.cart, session.shipping_option)
+            if refusal:
+                raise ValidationError(refusal)
 
             payload = prepare_stripe_payload(session, embedded=True)
             stripe_sess = stripe.checkout.Session.create(**payload)

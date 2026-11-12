@@ -12,6 +12,34 @@ from shipping.models import ShippingOption
 # differs between environments.
 PICKUP_DELIVERY_SPEED = 'PICKUP'
 
+FIXED_DISPATCH_PICKUP_ERROR = (
+    "Your order contains an item we post on a fixed day, "
+    "so it cannot be collected in store."
+)
+
+
+def pickup_refusal(cart, option):
+    """Why `option` cannot ship `cart`, or None when it can.
+
+    A cart holding a fixed-dispatch product cannot be collected: the advent
+    calendars are posted as one batch on a named day, which is the opposite
+    of coming to fetch it whenever. The checkout does not offer collection
+    for such a cart, but a hidden control is not a rule. Every endpoint that
+    sets or charges a shipping option asks here (BUG-19).
+
+    Matched on delivery_speed rather than the option's id: the id is whatever
+    that row happens to be in this environment, while the speed says what
+    the service is.
+    """
+    if (
+        option is not None
+        and option.delivery_speed == PICKUP_DELIVERY_SPEED
+        and cart is not None
+        and cart.fixed_dispatch_date
+    ):
+        return FIXED_DISPATCH_PICKUP_ERROR
+    return None
+
 class CheckoutSessionSerializer(serializers.ModelSerializer):
     shipping_address = AddressSerializer(read_only=True)
     billing_address = AddressSerializer(read_only=True)
@@ -107,24 +135,9 @@ class CheckoutDetailsSerializer(serializers.ModelSerializer):
                     "shipping_option_id": "Invalid shipping option ID"
                 })
 
-            # A cart holding a fixed-dispatch product cannot be collected: the
-            # advent calendars are posted as one batch on a named day, which is
-            # the opposite of coming to fetch it whenever. The checkout does not
-            # offer collection for such a cart, but a hidden control is not a
-            # rule — this is where it becomes one.
-            #
-            # Matched on delivery_speed rather than the option's id: the id is
-            # whatever that row happens to be in this environment, while the
-            # speed says what the service is.
-            if option.delivery_speed == PICKUP_DELIVERY_SPEED:
-                cart = self.instance.cart if self.instance else None
-                if cart and cart.fixed_dispatch_date:
-                    raise serializers.ValidationError({
-                        "shipping_option_id": (
-                            "Your order contains an item we post on a fixed day, "
-                            "so it cannot be collected in store."
-                        )
-                    })
+            refusal = pickup_refusal(self.instance.cart if self.instance else None, option)
+            if refusal:
+                raise serializers.ValidationError({"shipping_option_id": refusal})
 
         return data
 

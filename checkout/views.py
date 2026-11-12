@@ -7,7 +7,7 @@ from django.db.models import Q
 from checkout.models import CheckoutSession
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
-from .serializers import CheckoutSessionSerializer, CheckoutDetailsSerializer
+from .serializers import CheckoutSessionSerializer, CheckoutDetailsSerializer, pickup_refusal
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from shipping.models import ShippingOption
@@ -116,13 +116,16 @@ class CheckoutViewSet(viewsets.ViewSet):
                             active=True,
                             company__active=True
                         )
-                        checkout_session.shipping_option = shipping_option
-                        checkout_session.save()
                     except ShippingOption.DoesNotExist:
                         return Response(
                             {'error': 'Invalid shipping option'},
                             status=status.HTTP_400_BAD_REQUEST
                         )
+                    refusal = pickup_refusal(checkout_session.cart, shipping_option)
+                    if refusal:
+                        return Response({'error': refusal}, status=status.HTTP_400_BAD_REQUEST)
+                    checkout_session.shipping_option = shipping_option
+                    checkout_session.save()
 
                 logger.info(
                     "checkout_created_successfully",
@@ -234,6 +237,10 @@ class CheckoutViewSet(viewsets.ViewSet):
                     {'error': 'Invalid shipping option'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+            refusal = pickup_refusal(checkout_session.cart, shipping_option)
+            if refusal:
+                return Response({'error': refusal}, status=status.HTTP_400_BAD_REQUEST)
 
             checkout_session.shipping_option = shipping_option
 

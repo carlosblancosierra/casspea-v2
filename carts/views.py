@@ -141,6 +141,25 @@ class CartView(APIView):
         })
 
 
+def parse_quantity(value):
+    """A cart quantity from the request: a whole number of at least 1.
+
+    The views used to call int() on the raw value, so 'abc', null or 2.5
+    raised ValueError or TypeError and the API answered 500 (BUG-12).
+    """
+    try:
+        quantity = serializers.IntegerField().to_internal_value(value)
+    except serializers.ValidationError:
+        raise serializers.ValidationError({
+            "quantity": "Quantity must be a whole number"
+        })
+    if quantity < 1:
+        raise serializers.ValidationError({
+            "quantity": "Quantity must be greater than 0"
+        })
+    return quantity
+
+
 class CartItemViewSet(viewsets.ViewSet):
     """ /items/ endpoints """
 
@@ -150,16 +169,12 @@ class CartItemViewSet(viewsets.ViewSet):
 
     def _validate_product_and_qty(self, request):
         product_id = request.data.get('product')
-        quantity = int(request.data.get('quantity', 1))
+        quantity = parse_quantity(request.data.get('quantity', 1))
         try:
             product = Product.objects.get(pk=product_id)
         except Product.DoesNotExist:
             raise serializers.ValidationError({
                 "product": "Product not found"
-            })
-        if quantity < 1:
-            raise serializers.ValidationError({
-                "quantity": "Quantity must be greater than 0"
             })
         if product.sold_out:
             raise serializers.ValidationError({
@@ -207,13 +222,8 @@ class CartItemViewSet(viewsets.ViewSet):
                     raise serializers.ValidationError({
                         "product": "Product not found"
                     })
-            if (
-                'quantity' in request.data and
-                int(request.data.get('quantity', 0)) < 1
-            ):
-                raise serializers.ValidationError({
-                    "quantity": "Quantity must be greater than 0"
-                })
+            if 'quantity' in request.data:
+                parse_quantity(request.data['quantity'])
 
         serializer = CartItemCreateSerializer(
             cart_item, data=request.data, partial=True,

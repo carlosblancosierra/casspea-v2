@@ -125,11 +125,6 @@
     "path": "/api/products/"
   },
   {
-    "endpoint": "getProductsByCategory",
-    "method": "GET",
-    "path": "/api/products/?category=boxes"
-  },
-  {
     "endpoint": "getSession",
     "method": "GET",
     "path": "/api/checkout/session/"

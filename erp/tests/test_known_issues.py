@@ -1,15 +1,16 @@
 """Defects found in the November 2026 audit, each pinned by a test that
 describes the correct behaviour. IDs match next-casspea's
-docs/plan-rediseno-seguro.md.
+docs/plan-rediseno-seguro.md. All of them are fixed; the tests stay here as
+regression guards.
 
-An open bug's test is marked @expectedFailure: it fails today, so the suite
-stays green while the bug exists. Fixing the bug makes the test pass, Django
-reports an "unexpected success" and the run goes red. That is the signal to
-delete the decorator: the test stays here as a regression guard.
+To pin a new bug before fixing it, mark its test with unittest's
+@expectedFailure: it fails today, so the suite stays green while the bug
+exists. Fixing the bug makes the test pass, Django reports an "unexpected
+success" and the run goes red. That is the signal to delete the decorator.
 """
 import re
 from pathlib import Path
-from unittest import expectedFailure, mock
+from unittest import mock
 
 import stripe
 from django.conf import settings
@@ -19,6 +20,7 @@ from rest_framework.test import APIClient
 from carts.models import Cart, CartItem
 from carts.tests.test_totals import make_product
 from checkout.models import CheckoutSession
+from checkout.serializers import FIXED_DISPATCH_PICKUP_ERROR
 from orders.models import Order
 from checkout.stripe_utils import prepare_stripe_payload
 from checkout.tests import make_shipping_option
@@ -269,26 +271,64 @@ class Bug10GuestSessionTest(TestCase):
 
 
 class Bug11WebhookSignatureTest(TestCase):
-    """BUG-11: a webhook call without a Stripe-Signature header raises KeyError
-    (500) instead of being rejected with 400."""
+    """BUG-11 (fixed): a webhook call without a Stripe-Signature header raised
+    KeyError (500) instead of being rejected with 400."""
 
-    @expectedFailure
     def test_missing_signature_header_is_a_400(self):
         client = APIClient(raise_request_exception=False)
         response = client.post(WEBHOOK_URL, data=b'{}', content_type='application/json')
         self.assertEqual(response.status_code, 400)
 
+    def test_an_empty_signature_header_is_a_400(self):
+        client = APIClient(raise_request_exception=False)
+        response = client.post(WEBHOOK_URL, data=b'{}', content_type='application/json',
+                               HTTP_STRIPE_SIGNATURE='')
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_signed_call_still_reaches_the_handler(self):
+        event = stripe_event('customer.created', {'id': 'cus_test'})
+        response = post_webhook(APIClient(), event)
+        self.assertEqual(response.status_code, 200)
+
 
 class Bug12QuantityValidationTest(TestCase):
-    """BUG-12: a non-numeric quantity raises ValueError (500) instead of 400."""
+    """BUG-12 (fixed): a quantity that is not a whole number raised ValueError
+    or TypeError (500) instead of being refused with 400."""
 
-    @expectedFailure
+    def setUp(self):
+        self.client = APIClient(raise_request_exception=False)
+        self.client.get('/api/carts/')
+        self.product = make_product('Box of 9', '14.99')
+
+    def add(self, quantity):
+        return self.client.post('/api/carts/items/', {'product': self.product.id, 'quantity': quantity},
+                                format='json')
+
     def test_non_numeric_quantity_is_a_400(self):
-        client = APIClient(raise_request_exception=False)
-        client.get('/api/carts/')
-        product = make_product('Box of 9', '14.99')
-        response = client.post('/api/carts/items/', {'product': product.id, 'quantity': 'abc'}, format='json')
+        response = self.add('abc')
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'quantity': 'Quantity must be a whole number'})
+
+    def test_a_null_or_fractional_quantity_is_a_400(self):
+        for quantity in (None, 2.5, '2.5', True):
+            with self.subTest(quantity=quantity):
+                self.assertEqual(self.add(quantity).status_code, 400)
+
+    def test_zero_keeps_its_message(self):
+        response = self.add(0)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'quantity': 'Quantity must be greater than 0'})
+
+    def test_a_number_sent_as_text_still_works(self):
+        response = self.add('2')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['items'][0]['quantity'], 2)
+
+    def test_updating_a_line_with_a_non_numeric_quantity_is_a_400(self):
+        line_id = self.add(1).json()['items'][0]['id']
+        response = self.client.put(f'/api/carts/items/{line_id}/', {'quantity': 'abc'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(CartItem.objects.get(id=line_id).quantity, 1)
 
 
 @override_settings(SITE_URL='https://staging.casspea.test')
@@ -325,12 +365,13 @@ class Bug13FrontendUrlTest(TestCase):
 
 
 class Bug19FixedDispatchPickupTest(GuestCheckoutMixin, TestCase):
-    """BUG-19: a cart holding a fixed-dispatch product (the advent calendars,
-    posted together on a named day) must not be collected in store. The rule
-    lives in CheckoutDetailsSerializer, which no view uses: the endpoints the
-    storefront calls, POST /api/checkout/session/ and .../shipping-option/,
-    set the pickup option without asking. FixedDispatchBlocksPickupTest in
-    checkout/tests.py tests the serializer directly, so it passes anyway."""
+    """BUG-19 (fixed): a cart holding a fixed-dispatch product (the advent
+    calendars, posted together on a named day) must not be collected in
+    store. The rule only lived in CheckoutDetailsSerializer, which no view
+    uses: the endpoints the storefront calls, POST /api/checkout/session/ and
+    .../shipping-option/, set the pickup option without asking, and Stripe
+    charged it. FixedDispatchBlocksPickupTest in checkout/tests.py tests the
+    serializer directly, so it passed anyway."""
 
     def setUp(self):
         from datetime import timedelta
@@ -341,22 +382,189 @@ class Bug19FixedDispatchPickupTest(GuestCheckoutMixin, TestCase):
 
         self.client = APIClient()
         self.session = self.start_guest_checkout(self.client, 'advent@example.com')
-        calendar = make_product('Advent Calendar', '49.99')
-        calendar.fixed_dispatch_date = timezone.localdate() + timedelta(days=30)
-        calendar.save(update_fields=['fixed_dispatch_date'])
-        self.client.post('/api/carts/items/', {'product': calendar.id, 'quantity': 1}, format='json')
+        self.calendar = make_product('Advent Calendar', '49.99')
+        self.calendar.fixed_dispatch_date = timezone.localdate() + timedelta(days=30)
+        self.calendar.save(update_fields=['fixed_dispatch_date'])
+        self.client.post('/api/carts/items/', {'product': self.calendar.id, 'quantity': 1}, format='json')
         company, _ = ShippingCompany.objects.get_or_create(code='test-courier', defaults={'name': 'Test Courier'})
         self.pickup = ShippingOption.objects.create(
             company=company, name='Store pickup', delivery_speed='PICKUP',
             price=Decimal('0.00'), estimated_days_min=0, estimated_days_max=0,
         )
+        self.courier = make_shipping_option()
 
-    @expectedFailure
-    def test_store_pickup_is_refused_for_a_fixed_dispatch_cart(self):
-        response = self.client.post(
-            f'/api/checkout/session/{self.session.id}/shipping-option/',
-            {'shipping_option_id': self.pickup.id, 'pickup_date': '2026-12-01', 'pickup_time': '10:00 - 11:00'},
+    def choose(self, client, session, option):
+        return client.post(
+            f'/api/checkout/session/{session.id}/shipping-option/',
+            {'shipping_option_id': option.id, 'pickup_date': '2026-12-01', 'pickup_time': '10:00 - 11:00'},
             format='json')
+
+    def test_store_pickup_is_refused_for_a_fixed_dispatch_cart(self):
+        response = self.choose(self.client, self.session, self.pickup)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': FIXED_DISPATCH_PICKUP_ERROR})
+        self.session.refresh_from_db()
+        self.assertNotEqual(self.session.shipping_option, self.pickup)
+
+    def test_setting_the_session_refuses_it_too(self):
+        response = self.client.post('/api/checkout/session/', {'shipping_option_id': self.pickup.id}, format='json')
         self.assertEqual(response.status_code, 400)
         self.session.refresh_from_db()
         self.assertNotEqual(self.session.shipping_option, self.pickup)
+
+    def test_a_courier_service_is_still_accepted(self):
+        response = self.choose(self.client, self.session, self.courier)
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.shipping_option, self.courier)
+
+    def test_a_cart_without_one_can_still_be_collected(self):
+        client = APIClient()
+        session = self.start_guest_checkout(client, 'collect@example.com')
+        self.assertEqual(self.choose(client, session, self.pickup).status_code, 200)
+
+    def test_stripe_is_not_asked_to_charge_a_collection_chosen_before_the_calendar(self):
+        # Collection picked first, the calendar added afterwards.
+        CheckoutSession.objects.filter(id=self.session.id).update(shipping_option=self.pickup)
+        with mock.patch('checkout.stripe_views.stripe.checkout.Session.create') as create:
+            hosted = self.client.post('/api/checkout/stripe/create-session/')
+            embedded = self.client.post('/api/checkout/stripe/embedded/create-session/')
+        self.assertEqual(hosted.status_code, 400)
+        self.assertIn(FIXED_DISPATCH_PICKUP_ERROR, hosted.json()['error'])
+        self.assertEqual(embedded.status_code, 400)
+        self.assertIn(FIXED_DISPATCH_PICKUP_ERROR, embedded.json()['error'])
+        create.assert_not_called()
+
+
+class Bug18PreorderPriceTest(TestCase):
+    """BUG-18 (fixed): a product on pre-order costs preorder_price in the cart,
+    but Stripe was always asked for stripe_price_id, which points at whatever
+    price was set up in Stripe, usually the regular one. Unless someone
+    changed it when the pre-order started, the customer saw one amount and
+    paid another. A line whose Stripe price differs is now priced inline at
+    the cart's amount, on the same Stripe product (so product-restricted
+    coupons still apply), and the webhook maps it back to the product."""
+
+    def setUp(self):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from django.utils import timezone
+
+        self.preorder = make_product(
+            'Christmas Box', '30.00', preorder=True, preorder_price=Decimal('25.00'),
+            preorder_finish_date=timezone.localdate() + timedelta(days=10))
+        self.regular = make_product('Box of 9', '14.99')
+        self.cart = Cart.objects.create(session_id='bug-18')
+        CartItem.objects.create(cart=self.cart, product=self.preorder, quantity=2)
+        CartItem.objects.create(cart=self.cart, product=self.regular, quantity=1)
+        self.session = CheckoutSession.objects.create(
+            cart=self.cart, email='guest@example.com', shipping_option=make_shipping_option())
+
+    def stripe_price(self, unit_amount):
+        return stripe.Price.construct_from({
+            'id': 'price_Christmas Box', 'object': 'price', 'unit_amount': unit_amount,
+            'currency': 'gbp', 'product': 'prod_christmas', 'tax_behavior': 'inclusive',
+        }, 'sk_test_dummy')
+
+    def payload(self, unit_amount):
+        with mock.patch('stripe.Price.retrieve',
+                        return_value=self.stripe_price(unit_amount)) as retrieve:
+            payload = prepare_stripe_payload(self.session)
+        return payload, retrieve
+
+    def test_a_preorder_line_is_charged_at_the_cart_price(self):
+        payload, retrieve = self.payload(3000)
+        retrieve.assert_called_once_with('price_Christmas Box')
+        preorder_line, regular_line = sorted(payload['line_items'], key=lambda line: 'price' in line)
+        self.assertEqual(preorder_line['price_data'], {
+            'currency': 'gbp', 'product': 'prod_christmas', 'unit_amount': 2500, 'tax_behavior': 'inclusive'})
+        self.assertNotIn('price', preorder_line)
+        self.assertEqual(preorder_line['quantity'], 2)
+        self.assertEqual(regular_line['price'], 'price_Box of 9')
+        self.assertEqual(payload['metadata']['preorder:prod_christmas'], 'price_Christmas Box')
+
+    def test_a_stripe_price_that_already_matches_is_used_as_it_is(self):
+        payload, _ = self.payload(2500)
+        self.assertEqual({line['price'] for line in payload['line_items']},
+                         {'price_Christmas Box', 'price_Box of 9'})
+        self.assertEqual(set(payload['metadata']), {'checkout_session_id'})
+
+    def test_regular_products_do_not_ask_stripe(self):
+        self.cart.items.filter(product=self.preorder).delete()
+        _, retrieve = self.payload(3000)
+        retrieve.assert_not_called()
+
+    def test_the_hosted_checkout_sends_the_same_lines(self):
+        from addresses.models import Address
+        self.session.shipping_address = Address.objects.create(
+            street_address='1 Test Street', city='London', postcode='SW1A 1AA')
+        self.session.save()
+        with mock.patch('checkout.stripe_views.CheckoutSession.objects.get_or_create_from_request',
+                        return_value=self.session), \
+                mock.patch('stripe.Price.retrieve', return_value=self.stripe_price(3000)), \
+                mock.patch('checkout.stripe_views.stripe.checkout.Session.create',
+                           return_value=mock.Mock(id='cs_test', url='https://checkout.stripe.com/x')) as create:
+            response = APIClient().post('/api/checkout/stripe/create-session/')
+        self.assertEqual(response.status_code, 200)
+        kwargs = create.call_args.kwargs
+        amounts = [line['price_data']['unit_amount'] for line in kwargs['line_items'] if 'price_data' in line]
+        self.assertEqual(amounts, [2500])
+        self.assertEqual(kwargs['metadata']['preorder:prod_christmas'], 'price_Christmas Box')
+
+    def test_the_webhook_keeps_a_preorder_line_priced_inline(self):
+        def line(price_id, product, quantity):
+            return stripe.LineItem.construct_from({
+                'id': f'li_{price_id}', 'object': 'item', 'quantity': quantity,
+                'price': {'id': price_id, 'object': 'price', 'product': product},
+            }, 'sk_test_dummy')
+
+        # Stripe reports the inline price under a one-off id.
+        lines = mock.Mock()
+        lines.auto_paging_iter.return_value = iter([
+            line('price_1OneOffInline', 'prod_christmas', 2), line('price_Box of 9', 'prod_box', 1)])
+        event = stripe_event('checkout.session.completed', {
+            'id': 'cs_test_bug18', 'object': 'checkout.session', 'payment_status': 'paid',
+            'payment_intent': 'pi_test_bug18',
+            'metadata': {'checkout_session_id': str(self.session.id),
+                         'preorder:prod_christmas': 'price_Christmas Box'},
+        })
+        with mock.patch('checkout.webhooks.stripe.Webhook.construct_event', return_value=event), \
+                mock.patch('checkout.webhooks.stripe.checkout.Session.list_line_items', return_value=lines):
+            response = APIClient().post(WEBHOOK_URL, data=b'{}', content_type='application/json',
+                                        HTTP_STRIPE_SIGNATURE='t=1,v1=sig')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Order.objects.filter(checkout_session=self.session).exists())
+        self.assertEqual(set(self.cart.items.values_list('product__name', 'quantity')),
+                         {('Christmas Box', 2), ('Box of 9', 1)})
+
+
+class Bug09EmailLogoTest(TestCase):
+    """BUG-09 (fixed): the order confirmation and the lead emails show
+    https://www.casspea.co.uk/static/images/logo-gray.png, which the
+    storefront did not serve. next-casspea serves it now
+    (public/static/images/logo-gray.png, pinned by contract/inbound-links.json
+    there), which also mends every email already sent. Here: the logo keeps
+    that address, has a fixed width for clients that ignore CSS (Outlook),
+    and the promo emails, whose style block was an empty placeholder, get the
+    newsletter's styles, so the light logo sits on the purple header."""
+
+    LOGO = re.compile(r'<img src="https://www\.casspea\.co\.uk/static/images/logo-gray\.png"[^>]* width="150"')
+    LEAD_EMAILS = ['newsletter', 'blue20', 'gold20', 'thermomix_giveaway']
+
+    def test_every_logo_keeps_its_address_and_a_fixed_width(self):
+        paths = ['mails/templates/mails/order_paid.html'] + [
+            f'leads/templates/leads/mails/{name}.html' for name in self.LEAD_EMAILS]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertRegex((Path(settings.BASE_DIR) / path).read_text(), self.LOGO)
+
+    def test_the_promo_emails_are_styled_like_the_newsletter(self):
+        from django.template.loader import render_to_string
+
+        for name in self.LEAD_EMAILS:
+            with self.subTest(email=name):
+                html = render_to_string(f'leads/mails/{name}.html', {'unsubscribe_url': 'https://example.com/u'})
+                self.assertIn('.header img', html)
+                self.assertIn('linear-gradient(135deg, #4f46e5 0%, #817df5 100%)', html)

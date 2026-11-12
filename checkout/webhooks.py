@@ -15,6 +15,7 @@ from erp.settings import STAFF_EMAILS, ADMINS
 import structlog
 from django.contrib.contenttypes.models import ContentType
 from leads.unsubscribe import unsubscribe_url
+from checkout.stripe_utils import inline_preorder_prices
 
 # Initialize structlog logger
 logger = structlog.get_logger(__name__)
@@ -30,7 +31,13 @@ PAID_STATUSES = ('paid', 'no_payment_required')
 @csrf_exempt
 def stripe_webhook(request):
     payload = request.body
-    sig_header = request.META['HTTP_STRIPE_SIGNATURE']
+    # Stripe signs every delivery. A request without the header did not come
+    # from Stripe, so it is refused like a bad signature (400), not with a
+    # KeyError (500) that would show up as a server error (BUG-11).
+    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+    if not sig_header:
+        logger.warning("Webhook call without a Stripe-Signature header")
+        return HttpResponse(status=400)
     event = None
 
     # Get the appropriate webhook secret based on environment
@@ -101,16 +108,24 @@ def stripe_webhook(request):
             # Step 2: Reconcile cart items with what Stripe actually charged
             try:
                 stripe_line_items = stripe.checkout.Session.list_line_items(session.id, limit=100)
-                stripe_items = {
-                    item.price.id: item.quantity
-                    for item in stripe_line_items.auto_paging_iter()
-                }
 
                 cart = checkout_session.cart
                 cart_items_by_price = {
                     ci.product.stripe_price_id: ci
                     for ci in cart.items.select_related('product').all()
                 }
+
+                # A pre-order line priced inline (BUG-18) carries a one-off
+                # price id. The session metadata maps its Stripe product back
+                # to the product's own price id, so it is not mistaken for a
+                # line the customer did not pay for.
+                inline_prices = inline_preorder_prices(getattr(session, 'metadata', None))
+                stripe_items = {}
+                for item in stripe_line_items.auto_paging_iter():
+                    price_id = item.price.id
+                    if price_id not in cart_items_by_price:
+                        price_id = inline_prices.get(item.price.product, price_id)
+                    stripe_items[price_id] = item.quantity
 
                 needs_reconciliation = (
                     set(stripe_items.keys()) != set(cart_items_by_price.keys())
