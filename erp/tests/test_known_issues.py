@@ -291,20 +291,37 @@ class Bug12QuantityValidationTest(TestCase):
         self.assertEqual(response.status_code, 400)
 
 
+@override_settings(SITE_URL='https://staging.casspea.test')
 class Bug13FrontendUrlTest(TestCase):
-    """BUG-13: Stripe's return URLs are hardcoded to www.casspea.co.uk, so a
-    checkout started on a preview or staging frontend sends the customer back
-    to production. They should come from one setting."""
+    """BUG-13 (fixed): Stripe's return URLs were hardcoded to
+    www.casspea.co.uk, so a checkout started on a staging storefront sent the
+    customer back to production. They come from settings.SITE_URL now, which
+    the SITE_URL environment variable sets."""
 
-    @expectedFailure
-    @override_settings(FRONTEND_URL='https://preview.casspea.test')
-    def test_stripe_return_urls_follow_the_frontend_url_setting(self):
+    def setUp(self):
         cart = Cart.objects.create(session_id='bug-13')
         CartItem.objects.create(cart=cart, product=make_product('Box of 9', '14.99'), quantity=1)
-        session = CheckoutSession.objects.create(
+        self.session = CheckoutSession.objects.create(
             cart=cart, email='guest@example.com', shipping_option=make_shipping_option())
-        payload = prepare_stripe_payload(session, embedded=True)
-        self.assertTrue(payload['return_url'].startswith('https://preview.casspea.test/'))
+
+    def test_the_embedded_checkout_returns_to_the_configured_storefront(self):
+        payload = prepare_stripe_payload(self.session, embedded=True)
+        self.assertTrue(payload['return_url'].startswith('https://staging.casspea.test/checkout/result?'))
+
+    def test_the_hosted_checkout_returns_to_the_configured_storefront(self):
+        from addresses.models import Address
+        self.session.shipping_address = Address.objects.create(
+            street_address='1 Test Street', city='London', postcode='SW1A 1AA')
+        self.session.save()
+        with mock.patch('checkout.stripe_views.CheckoutSession.objects.get_or_create_from_request',
+                        return_value=self.session), \
+                mock.patch('checkout.stripe_views.stripe.checkout.Session.create',
+                           return_value=mock.Mock(id='cs_test', url='https://checkout.stripe.com/x')) as create:
+            response = APIClient().post('/api/checkout/stripe/create-session/')
+        self.assertEqual(response.status_code, 200)
+        kwargs = create.call_args.kwargs
+        self.assertTrue(kwargs['success_url'].startswith('https://staging.casspea.test/checkout/success?'))
+        self.assertTrue(kwargs['cancel_url'].startswith('https://staging.casspea.test/checkout/cancel?'))
 
 
 class Bug19FixedDispatchPickupTest(GuestCheckoutMixin, TestCase):

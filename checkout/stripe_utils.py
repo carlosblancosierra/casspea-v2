@@ -1,5 +1,6 @@
 
 from datetime import timedelta
+from django.conf import settings
 from django.utils import timezone
 
 
@@ -42,10 +43,8 @@ def prepare_stripe_payload(checkout_session, embedded=False):
         },
     }
 
-    # Dominios
-    PROT = "https"
-    FRONT = "www.casspea.co.uk"
-    base = f"{PROT}://{FRONT}"
+    # The storefront Stripe sends the customer back to (settings.SITE_URL).
+    base = settings.SITE_URL
 
     # No payment_method_types here either - same removal, same 400. The methods
     # on offer come from the Stripe Dashboard's payment-method settings.
