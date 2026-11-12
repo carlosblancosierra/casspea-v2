@@ -18,6 +18,7 @@ from rest_framework.test import APIClient
 from carts.models import Cart, CartItem
 from carts.tests.test_totals import make_product
 from checkout.models import CheckoutSession
+from orders.models import Order
 from checkout.stripe_utils import prepare_stripe_payload
 from checkout.tests import make_shipping_option
 
@@ -95,8 +96,8 @@ class Bug02CheckoutSessionPrivacyTest(GuestCheckoutMixin, TestCase):
 
 
 class Bug03UnpaidCompletionTest(TestCase):
-    """BUG-03: checkout.session.completed is handled as a payment even when
-    Stripe says payment_status is 'unpaid' (delayed methods such as bank
+    """BUG-03 (fixed): checkout.session.completed was handled as a payment even
+    when Stripe said payment_status was 'unpaid' (delayed methods such as bank
     debits or vouchers finish later, or never)."""
 
     def setUp(self):
@@ -104,15 +105,52 @@ class Bug03UnpaidCompletionTest(TestCase):
         CartItem.objects.create(cart=cart, product=make_product('Box of 9', '14.99'), quantity=1)
         self.session = CheckoutSession.objects.create(cart=cart, email='guest@example.com')
 
-    @expectedFailure
-    def test_unpaid_completion_does_not_mark_the_session_paid(self):
-        event = stripe_event('checkout.session.completed', {
-            'id': 'cs_test', 'object': 'checkout.session', 'payment_status': 'unpaid',
+    def send(self, event_type, payment_status):
+        event = stripe_event(event_type, {
+            'id': 'cs_test', 'object': 'checkout.session', 'payment_status': payment_status,
             'payment_intent': 'pi_test', 'metadata': {'checkout_session_id': str(self.session.id)},
         })
-        post_webhook(self.client, event)
+        response = post_webhook(self.client, event)
         self.session.refresh_from_db()
-        self.assertNotEqual(self.session.payment_status, CheckoutSession.Status.PAID)
+        return response
+
+    def test_unpaid_completion_does_not_mark_the_session_paid(self):
+        response = self.send('checkout.session.completed', 'unpaid')
+        self.assertEqual(response.status_code, 200)  # acknowledged, so Stripe does not retry
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PENDING)
+        self.assertFalse(Order.objects.filter(checkout_session=self.session).exists())
+        self.assertTrue(self.session.cart.active)
+
+    def test_the_delayed_payment_arriving_creates_the_order(self):
+        self.send('checkout.session.completed', 'unpaid')
+        response = self.send('checkout.session.async_payment_succeeded', 'paid')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PAID)
+        self.assertEqual(Order.objects.filter(checkout_session=self.session).count(), 1)
+        self.assertFalse(self.session.cart.active)
+
+    def test_a_delayed_payment_that_fails_marks_the_session_failed(self):
+        self.send('checkout.session.completed', 'unpaid')
+        response = self.send('checkout.session.async_payment_failed', 'unpaid')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.FAILED)
+        self.assertFalse(Order.objects.filter(checkout_session=self.session).exists())
+
+    def test_a_failed_delayed_payment_never_undoes_a_paid_order(self):
+        self.send('checkout.session.completed', 'paid')
+        self.send('checkout.session.async_payment_failed', 'unpaid')
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PAID)
+
+    def test_a_zero_total_order_is_fulfilled(self):
+        # A 100% coupon: Stripe has nothing to charge and says so.
+        self.send('checkout.session.completed', 'no_payment_required')
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PAID)
+        self.assertEqual(Order.objects.filter(checkout_session=self.session).count(), 1)
+
+    def test_a_card_payment_still_creates_the_order(self):
+        self.send('checkout.session.completed', 'paid')
+        self.assertEqual(self.session.payment_status, CheckoutSession.Status.PAID)
+        self.assertEqual(Order.objects.filter(checkout_session=self.session).count(), 1)
 
 
 class Bug07PaymentFailedTest(TestCase):
