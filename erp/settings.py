@@ -524,6 +524,31 @@ if IS_HEROKU:
     LOGGING['loggers']['django']['level'] = 'WARNING'
     LOGGING['loggers']['django.server']['level'] = 'WARNING'
 
+# Error reporting and month-long logs. Both stay off until their env vars are
+# set; see erp/observability.py for what each one needs.
+from erp.observability import init_sentry  # noqa: E402
+
+# The DSN is public by design (it only lets you send events), so production
+# has it built in; SENTRY_DSN overrides it, and local runs and tests send nothing.
+SENTRY_DSN_PRODUCTION = (
+    'https://00fb28e26b9cbda4356e343200314079@o4512420674535424.ingest.us.sentry.io/4512420747345920'
+)
+init_sentry(
+    env('SENTRY_DSN', default=SENTRY_DSN_PRODUCTION if IS_HEROKU else ''),
+    env('SENTRY_ENVIRONMENT', default='production' if IS_HEROKU else ENVIRONMENT),
+)
+
+CLOUDWATCH_LOG_GROUP = env('CLOUDWATCH_LOG_GROUP', default='')
+if CLOUDWATCH_LOG_GROUP:
+    LOGGING['handlers']['cloudwatch'] = {
+        '()': 'erp.observability.SafeCloudWatchHandler',
+        'log_group': CLOUDWATCH_LOG_GROUP,
+        'retention_days': env.int('CLOUDWATCH_RETENTION_DAYS', default=30),
+        'formatter': 'json',
+    }
+    for _logger in LOGGING['loggers'].values():
+        _logger['handlers'].append('cloudwatch')
+
 ROYAL_MAIL_API_KEY = env('ROYAL_MAIL_API_KEY')
 ROYAL_MAIL_BASE_URL = 'https://api.parcel.royalmail.com/api/v1'
 

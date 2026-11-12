@@ -1,3 +1,4 @@
+import logging
 from django.utils import timezone
 from datetime import timedelta
 from checkout.models import CheckoutSession
@@ -312,6 +313,6 @@ def send_error_notification_to_admins(
             message=body,
             fail_silently=True,  # Don't raise exceptions if email fails
         )
-    except Exception as e:
+    except Exception:
         # Log the error but don't raise to avoid cascading failures
-        print(f"Failed to send admin notification email: {str(e)}")
+        logging.getLogger(__name__).exception("Failed to send admin notification email")
