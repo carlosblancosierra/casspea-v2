@@ -176,3 +176,41 @@ class Bug13FrontendUrlTest(TestCase):
             cart=cart, email='guest@example.com', shipping_option=make_shipping_option())
         payload = prepare_stripe_payload(session, embedded=True)
         self.assertTrue(payload['return_url'].startswith('https://preview.casspea.test/'))
+
+
+class Bug19FixedDispatchPickupTest(GuestCheckoutMixin, TestCase):
+    """BUG-19: a cart holding a fixed-dispatch product (the advent calendars,
+    posted together on a named day) must not be collected in store. The rule
+    lives in CheckoutDetailsSerializer, which no view uses: the endpoints the
+    storefront calls, POST /api/checkout/session/ and .../shipping-option/,
+    set the pickup option without asking. FixedDispatchBlocksPickupTest in
+    checkout/tests.py tests the serializer directly, so it passes anyway."""
+
+    def setUp(self):
+        from datetime import timedelta
+        from decimal import Decimal
+
+        from django.utils import timezone
+        from shipping.models import ShippingCompany, ShippingOption
+
+        self.client = APIClient()
+        self.session = self.start_guest_checkout(self.client, 'advent@example.com')
+        calendar = make_product('Advent Calendar', '49.99')
+        calendar.fixed_dispatch_date = timezone.localdate() + timedelta(days=30)
+        calendar.save(update_fields=['fixed_dispatch_date'])
+        self.client.post('/api/carts/items/', {'product': calendar.id, 'quantity': 1}, format='json')
+        company, _ = ShippingCompany.objects.get_or_create(code='test-courier', defaults={'name': 'Test Courier'})
+        self.pickup = ShippingOption.objects.create(
+            company=company, name='Store pickup', delivery_speed='PICKUP',
+            price=Decimal('0.00'), estimated_days_min=0, estimated_days_max=0,
+        )
+
+    @expectedFailure
+    def test_store_pickup_is_refused_for_a_fixed_dispatch_cart(self):
+        response = self.client.post(
+            f'/api/checkout/session/{self.session.id}/shipping-option/',
+            {'shipping_option_id': self.pickup.id, 'pickup_date': '2026-12-01', 'pickup_time': '10:00 - 11:00'},
+            format='json')
+        self.assertEqual(response.status_code, 400)
+        self.session.refresh_from_db()
+        self.assertNotEqual(self.session.shipping_option, self.pickup)
