@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from checkout.models import CheckoutSession
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
@@ -13,6 +14,27 @@ from shipping.models import ShippingOption
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+
+def get_own_checkout_session(request, pk):
+    """The checkout session `pk`, only if it belongs to whoever is asking.
+
+    Ids are sequential, so a lookup by id alone let anyone read every
+    customer's email, phone and address, and change their shipping option
+    (BUG-02). A session is yours when its cart is: by user once logged in, by
+    browser session otherwise. Anything else is reported as not found, so the
+    answer does not reveal which ids exist.
+    """
+    if request.user.is_authenticated:
+        owner = Q(cart__user=request.user)
+    elif request.session.session_key:
+        owner = Q(cart__user__isnull=True, cart__session_id=request.session.session_key)
+    else:
+        raise CheckoutSession.DoesNotExist
+    try:
+        return CheckoutSession.objects.select_related('cart').get(owner, pk=pk)
+    except (ValueError, TypeError):  # a non-numeric id
+        raise CheckoutSession.DoesNotExist
 
 
 class CheckoutViewSet(viewsets.ViewSet):
@@ -148,7 +170,7 @@ class CheckoutViewSet(viewsets.ViewSet):
         )
 
         try:
-            checkout_session = CheckoutSession.objects.get(id=pk)
+            checkout_session = get_own_checkout_session(request, pk)
 
             logger.debug(
                 "checkout_session_found",
@@ -191,7 +213,7 @@ class CheckoutViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['post'], url_path='shipping-option')
     def update_shipping_option(self, request, pk=None):
         try:
-            checkout_session = CheckoutSession.objects.get(id=pk)
+            checkout_session = get_own_checkout_session(request, pk)
             shipping_option_id = request.data.get('shipping_option_id')
 
             if not shipping_option_id:

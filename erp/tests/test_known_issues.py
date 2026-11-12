@@ -67,32 +67,59 @@ class Bug01DependencyConfusionTest(TestCase):
 
 
 class Bug02CheckoutSessionPrivacyTest(GuestCheckoutMixin, TestCase):
-    """BUG-02: checkout sessions are readable and writable by id by anyone.
-    The ids are sequential, so every customer's email, phone and address can
-    be enumerated."""
+    """BUG-02 (fixed): checkout sessions were readable and writable by id by
+    anyone. The ids are sequential, so every customer's email, phone and
+    address could be enumerated."""
 
     def setUp(self):
         self.victim = APIClient()
         self.session = self.start_guest_checkout(self.victim, 'victim@example.com')
         self.stranger = APIClient()
+        self.stranger.get('/api/carts/')  # a real visitor, with a session of their own
 
     def test_the_owner_can_read_their_own_session(self):
         response = self.victim.get(f'/api/checkout/session/{self.session.id}/')
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['email'], 'victim@example.com')
 
-    @expectedFailure
+    def test_the_owner_can_change_their_own_shipping_option(self):
+        option = make_shipping_option()
+        response = self.victim.post(
+            f'/api/checkout/session/{self.session.id}/shipping-option/',
+            {'shipping_option_id': option.id}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.shipping_option, option)
+
     def test_a_stranger_cannot_read_someone_elses_session(self):
         response = self.stranger.get(f'/api/checkout/session/{self.session.id}/')
         self.assertIn(response.status_code, (403, 404))
         self.assertNotIn(b'victim@example.com', response.content)
 
-    @expectedFailure
     def test_a_stranger_cannot_change_someone_elses_shipping_option(self):
         option = make_shipping_option()
         response = self.stranger.post(
             f'/api/checkout/session/{self.session.id}/shipping-option/',
             {'shipping_option_id': option.id}, format='json')
         self.assertIn(response.status_code, (403, 404))
+        self.session.refresh_from_db()
+        self.assertIsNone(self.session.shipping_option)
+
+    def test_a_visitor_without_a_session_gets_nothing(self):
+        response = APIClient().get(f'/api/checkout/session/{self.session.id}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_logged_in_stranger_cannot_read_a_guest_session(self):
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.create_user(email='other@example.com', password='x' * 12)
+        client = APIClient()
+        client.force_authenticate(user)
+        response = client.get(f'/api/checkout/session/{self.session.id}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_non_numeric_id_is_not_found(self):
+        response = self.victim.get('/api/checkout/session/not-a-number/')
+        self.assertEqual(response.status_code, 404)
 
 
 class Bug03UnpaidCompletionTest(TestCase):
