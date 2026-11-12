@@ -62,6 +62,9 @@ def prepare_stripe_payload(checkout_session, embedded=False):
             "submit": {"message": "We'll send your order confirmation by email."}
         },
         "metadata": {"checkout_session_id": checkout_session.id},
+        # Copied onto the PaymentIntent, so payment_intent.* webhooks can find
+        # the session too (the session's own metadata stays on the session).
+        "payment_intent_data": {"metadata": {"checkout_session_id": str(checkout_session.id)}},
         "expires_at": int((timezone.now() + timedelta(minutes=30)).timestamp()),
     }
 

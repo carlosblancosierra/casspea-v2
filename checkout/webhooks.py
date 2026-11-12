@@ -301,16 +301,29 @@ def stripe_webhook(request):
             session_id=session.id
         )
 
+        # The object is a PaymentIntent. It carries checkout_session_id only
+        # when the Checkout Session was created with payment_intent_data
+        # metadata; older ones never did, and reading it answered 500 to every
+        # such event, so Stripe kept retrying them (BUG-07). Nothing to match:
+        # acknowledge.
         try:
-            # Retrieve the CheckoutSession using metadata
             checkout_session_id = session.metadata['checkout_session_id']
+        except (KeyError, TypeError, AttributeError):
+            logger.info("payment_intent.payment_failed without checkout_session_id, ignored",
+                        payment_intent_id=session.id)
+            return HttpResponse(status=200)
+
+        try:
+            # A declined card can still be retried in the same Checkout, so
+            # this never overrides a session that ended up paid.
             checkout_session = CheckoutSession.objects.get(id=checkout_session_id)
             logger.info("CheckoutSession retrieved for failed payment", checkout_session_id=checkout_session_id)
 
             # Update CheckoutSession status
-            checkout_session.payment_status = CheckoutSession.Status.FAILED
-            checkout_session.save()
-            logger.info("CheckoutSession updated to FAILED", checkout_session_id=checkout_session_id)
+            if checkout_session.payment_status == CheckoutSession.Status.PENDING:
+                checkout_session.payment_status = CheckoutSession.Status.FAILED
+                checkout_session.save()
+                logger.info("CheckoutSession updated to FAILED", checkout_session_id=checkout_session_id)
 
         except CheckoutSession.DoesNotExist as csde:
             logger.error("CheckoutSession does not exist for failed payment", checkout_session_id=checkout_session_id, error=str(csde))
