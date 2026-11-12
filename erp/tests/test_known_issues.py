@@ -1,15 +1,16 @@
 """Defects found in the November 2026 audit, each pinned by a test that
 describes the correct behaviour. IDs match next-casspea's
-docs/plan-rediseno-seguro.md.
+docs/plan-rediseno-seguro.md. All of them are fixed; the tests stay here as
+regression guards.
 
-An open bug's test is marked @expectedFailure: it fails today, so the suite
-stays green while the bug exists. Fixing the bug makes the test pass, Django
-reports an "unexpected success" and the run goes red. That is the signal to
-delete the decorator: the test stays here as a regression guard.
+To pin a new bug before fixing it, mark its test with unittest's
+@expectedFailure: it fails today, so the suite stays green while the bug
+exists. Fixing the bug makes the test pass, Django reports an "unexpected
+success" and the run goes red. That is the signal to delete the decorator.
 """
 import re
 from pathlib import Path
-from unittest import expectedFailure, mock
+from unittest import mock
 
 import stripe
 from django.conf import settings
