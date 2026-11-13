@@ -13,6 +13,7 @@ from django.http import HttpResponse
 import csv
 from rest_framework.views import APIView  # type: ignore
 from rest_framework.permissions import AllowAny
+from rest_framework.throttling import ScopedRateThrottle
 from django.core import signing
 import structlog
 from .unsubscribe import email_from_token, mask, normalise, opt_out, unsubscribe_url
@@ -25,6 +26,8 @@ class SubscribeNewsletterView(generics.CreateAPIView):
     """
     Endpoint to subscribe a user to the newsletter.
     """
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'leads'
     serializer_class = LeadSerializer
 
     def create(self, request, *args, **kwargs):
@@ -132,6 +135,8 @@ class GenericLeadSubscribeView(generics.CreateAPIView):
     """
     Endpoint to subscribe any type of lead. Email is required, other fields are optional.
     """
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'leads'
     serializer_class = LeadSerializer
 
     def create(self, request, *args, **kwargs):

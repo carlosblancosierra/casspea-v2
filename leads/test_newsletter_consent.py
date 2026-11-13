@@ -1,5 +1,8 @@
 from unittest.mock import patch
 
+from django.core.cache import cache
+from rest_framework.throttling import ScopedRateThrottle
+
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -47,3 +50,11 @@ class NewsletterConsentTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertNotIn('SMTP', str(response.data))
         self.assertEqual(Lead.objects.count(), 1)
+
+    def test_signups_are_limited_per_address(self):
+        cache.clear()
+        with patch.object(ScopedRateThrottle, 'THROTTLE_RATES', {'leads': '2/hour'}):
+            codes = [self.subscribe(f'p{i}@example.com').status_code for i in range(3)]
+        cache.clear()
+
+        self.assertEqual(codes, [201, 201, 429])
