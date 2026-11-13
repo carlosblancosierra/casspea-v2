@@ -308,6 +308,60 @@ class StripeWebhookTest(TestCase):
         self.assertEqual(cart_item.quantity, 3)
 
 
+class WebhookReconciliationSameProductTest(TestCase):
+    """Two boxes of the same product with different flavours are two cart
+    lines with one Stripe price. Reconciliation keyed lines by price, so only
+    one line per product was compared: when Stripe listed the lines in another
+    order, a correct payment looked like a mismatch and a line's quantity was
+    overwritten, changing what gets packed."""
+
+    _event = StripeWebhookTest._event
+    _post = StripeWebhookTest._post
+
+    def setUp(self):
+        StripeWebhookTest.setUp(self)  # one line of 2
+        CartItem.objects.create(cart=self.cart, product=self.box, quantity=1)
+
+    def _lines(self, *quantities):
+        items = []
+        for quantity in quantities:
+            item = mock.Mock()
+            item.price.id = self.box.stripe_price_id
+            item.quantity = quantity
+            items.append(item)
+        result = mock.Mock()
+        result.auto_paging_iter.return_value = iter(items)
+        return result
+
+    def _run(self, line_items):
+        with mock.patch(
+            'checkout.webhooks.stripe.Webhook.construct_event',
+            return_value=self._event(),
+        ), mock.patch(
+            'checkout.webhooks.stripe.checkout.Session.list_line_items',
+            return_value=line_items,
+        ):
+            return self._post()
+
+    def quantities(self):
+        return sorted(self.cart.items.values_list('quantity', flat=True))
+
+    def test_lines_listed_in_another_order_leave_the_cart_alone(self):
+        self.assertEqual(self._run(self._lines(1, 2)).status_code, 200)
+        self.assertEqual(self.quantities(), [1, 2])
+
+    def test_lines_listed_in_the_same_order_leave_the_cart_alone(self):
+        self.assertEqual(self._run(self._lines(2, 1)).status_code, 200)
+        self.assertEqual(self.quantities(), [1, 2])
+
+    def test_a_real_mismatch_on_a_shared_price_does_not_guess_a_line(self):
+        # Which flavour box was dropped cannot be told from the price, so the
+        # lines stay as they are (and it is logged) rather than corrupting one.
+        self.assertEqual(self._run(self._lines(2)).status_code, 200)
+        self.assertEqual(self.quantities(), [1, 2])
+        self.assertTrue(Order.objects.filter(checkout_session=self.session).exists())
+
+
 class FixedDispatchBlocksPickupTest(TestCase):
     """A batch posted on a named day is the opposite of coming to fetch it.
 

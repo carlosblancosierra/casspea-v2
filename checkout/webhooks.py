@@ -1,3 +1,4 @@
+from collections import defaultdict
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse
@@ -110,60 +111,62 @@ def stripe_webhook(request):
                 stripe_line_items = stripe.checkout.Session.list_line_items(session.id, limit=100)
 
                 cart = checkout_session.cart
-                cart_items_by_price = {
-                    ci.product.stripe_price_id: ci
-                    for ci in cart.items.select_related('product').all()
-                }
+                # Several cart lines can share one Stripe price: two boxes of
+                # the same product with different flavours. Compare the total
+                # quantity per price, never one line per price, or a correct
+                # payment listed in another order looked like a mismatch and a
+                # line's quantity was overwritten.
+                cart_lines_by_price = defaultdict(list)
+                for ci in cart.items.select_related('product').all():
+                    cart_lines_by_price[ci.product.stripe_price_id].append(ci)
 
                 # A pre-order line priced inline (BUG-18) carries a one-off
                 # price id. The session metadata maps its Stripe product back
                 # to the product's own price id, so it is not mistaken for a
                 # line the customer did not pay for.
                 inline_prices = inline_preorder_prices(getattr(session, 'metadata', None))
-                stripe_items = {}
+                stripe_items = defaultdict(int)
                 for item in stripe_line_items.auto_paging_iter():
                     price_id = item.price.id
-                    if price_id not in cart_items_by_price:
+                    if price_id not in cart_lines_by_price:
                         price_id = inline_prices.get(item.price.product, price_id)
-                    stripe_items[price_id] = item.quantity
+                    stripe_items[price_id] += item.quantity
 
-                needs_reconciliation = (
-                    set(stripe_items.keys()) != set(cart_items_by_price.keys())
-                    or any(
-                        stripe_items[pid] != cart_items_by_price[pid].quantity
-                        for pid in stripe_items if pid in cart_items_by_price
-                    )
-                )
+                cart_totals = {pid: sum(ci.quantity for ci in lines) for pid, lines in cart_lines_by_price.items()}
+                needs_reconciliation = cart_totals != dict(stripe_items)
 
                 if needs_reconciliation:
                     logger.info("Cart/Stripe mismatch — reconciling",
-                        stripe_prices=list(stripe_items.keys()),
-                        cart_prices=list(cart_items_by_price.keys()),
+                        stripe_items=dict(stripe_items),
+                        cart_items=cart_totals,
                     )
 
-                    # Remove items present in cart but not charged by Stripe
-                    for price_id, cart_item in list(cart_items_by_price.items()):
-                        if price_id not in stripe_items:
-                            cart_item.delete()
+                    for price_id in set(cart_totals) | set(stripe_items):
+                        charged = stripe_items.get(price_id, 0)
+                        lines = cart_lines_by_price.get(price_id, [])
+                        if cart_totals.get(price_id, 0) == charged:
+                            continue
+                        if len(lines) > 1:
+                            # Which line changed cannot be told from the price.
+                            # Leave them for a person rather than guess.
+                            logger.error("Cart/Stripe mismatch on a price shared by several lines — not changed",
+                                price_id=price_id, charged=charged,
+                                cart_item_ids=[ci.id for ci in lines])
+                        elif lines and charged == 0:
+                            lines[0].delete()
                             logger.info("Removed cart item absent from Stripe payment",
-                                price_id=price_id, cart_item_id=cart_item.id)
-                            del cart_items_by_price[price_id]
-
-                    # Add or update items to match Stripe quantities
-                    for price_id, quantity in stripe_items.items():
-                        if price_id in cart_items_by_price:
-                            cart_item = cart_items_by_price[price_id]
-                            if cart_item.quantity != quantity:
-                                cart_item.quantity = quantity
-                                cart_item.save()
-                                logger.info("Updated cart item quantity to match Stripe",
-                                    price_id=price_id, quantity=quantity)
+                                price_id=price_id, cart_item_id=lines[0].id)
+                        elif lines:
+                            lines[0].quantity = charged
+                            lines[0].save()
+                            logger.info("Updated cart item quantity to match Stripe",
+                                price_id=price_id, quantity=charged)
                         else:
                             try:
                                 product = Product.objects.get(stripe_price_id=price_id)
-                                CartItem.objects.create(cart=cart, product=product, quantity=quantity)
+                                CartItem.objects.create(cart=cart, product=product, quantity=charged)
                                 logger.info("Added cart item from Stripe payment",
-                                    price_id=price_id, quantity=quantity)
+                                    price_id=price_id, quantity=charged)
                             except Product.DoesNotExist:
                                 logger.warning("No product found for Stripe price_id — skipping",
                                     price_id=price_id)
