@@ -14,7 +14,11 @@ import csv
 from rest_framework.views import APIView  # type: ignore
 from rest_framework.permissions import AllowAny
 from django.core import signing
-from .unsubscribe import email_from_token, mask, opt_out, unsubscribe_url
+import structlog
+from .unsubscribe import email_from_token, mask, normalise, opt_out, unsubscribe_url
+from .models import EmailOptOut
+
+logger = structlog.get_logger(__name__)
 
 
 class SubscribeNewsletterView(generics.CreateAPIView):
@@ -28,7 +32,19 @@ class SubscribeNewsletterView(generics.CreateAPIView):
         data['lead_type'] = 'newsletter'
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
-        lead = serializer.save()
+
+        # Signing up here is an explicit request for the newsletter, so it
+        # overrides an earlier unsubscribe. Before, the opt-out stayed and the
+        # person never got what they had just asked for.
+        email = normalise(serializer.validated_data['email'])
+        EmailOptOut.objects.filter(email=email).delete()
+        Lead.objects.filter(email__iexact=email, lead_type=Lead.NEWSLETTER).update(unsubscribed=False)
+
+        # One newsletter lead per address: signing up twice resends the code
+        # instead of adding a duplicate row to the list.
+        lead = Lead.objects.filter(email__iexact=email, lead_type=Lead.NEWSLETTER).first()
+        if lead is None:
+            lead = serializer.save()
 
         # Get or create EmailType
         email_type, created = EmailType.objects.get_or_create(
@@ -70,20 +86,16 @@ class SubscribeNewsletterView(generics.CreateAPIView):
             error_message=error_message if status_email == 'failed' else None,
         )
 
-        headers = self.get_success_headers(serializer.data)
-        response_data = {'message': 'Successfully subscribed to newsletter'}
-
+        # The person is on the list whether or not the email went out. A 500
+        # here told them to "try again", which only added duplicates, and it
+        # sent the raw mail-server error to the browser. The failure is in
+        # EmailSent and the logs for us to resend.
         if status_email == 'failed':
-            response_data['error'] = error_message or "Unknown error"
+            logger.error("newsletter_email_failed", lead_id=lead.id, error=error_message)
 
         return Response(
-            response_data,
-            status=(
-                status.HTTP_201_CREATED
-                if status_email == 'sent'
-                else status.HTTP_500_INTERNAL_SERVER_ERROR
-            ),
-            headers=headers
+            {'message': 'Successfully subscribed to newsletter'},
+            status=status.HTTP_201_CREATED,
         )
 
 
