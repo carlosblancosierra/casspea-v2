@@ -279,6 +279,12 @@ AUTH_USER_MODEL = 'users.CustomUser'
 # Add REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Per-IP limits for public endpoints that make us send email. Without
+    # one, anyone could script our server into mailing any address, which
+    # wrecks the sending domain's reputation. Generous for real people.
+    'DEFAULT_THROTTLE_RATES': {
+        'leads': env.str('LEADS_THROTTLE_RATE', default='10/hour'),
+    },
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',

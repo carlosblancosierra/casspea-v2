@@ -55,3 +55,7 @@ Q_CLUSTER = {**Q_CLUSTER, 'sync': True}  # noqa: F405
 
 # Speed up user creation in tests.
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+
+# Tests post to the lead endpoints far more than a person would. The limit
+# itself is tested in leads/test_newsletter_consent.py.
+REST_FRAMEWORK = {**REST_FRAMEWORK, 'DEFAULT_THROTTLE_RATES': {'leads': '10000/hour'}}
